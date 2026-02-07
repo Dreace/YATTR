@@ -1,0 +1,43 @@
+FROM node:20-alpine AS frontend-build
+
+WORKDIR /frontend
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci --no-audit --no-fund --include=dev
+COPY frontend/ ./
+RUN npm run build
+
+FROM python:3.12-slim AS backend-deps
+
+ENV PIP_NO_CACHE_DIR=1 \
+    PYTHONDONTWRITEBYTECODE=1
+WORKDIR /build
+
+COPY backend/requirements.txt /build/requirements.txt
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir --prefix=/install -r /build/requirements.txt
+
+FROM python:3.12-slim AS backend-src
+
+WORKDIR /src
+COPY backend/ /src/backend/
+RUN rm -rf /src/backend/tests /src/backend/.venv /src/backend/.pytest_cache && \
+    find /src/backend -type d -name "__pycache__" -prune -exec rm -rf {} + && \
+    find /src/backend -type f -name "*.pyc" -delete
+
+FROM python:3.12-slim AS runtime
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+WORKDIR /app
+
+COPY --from=backend-deps /install /usr/local
+COPY --from=backend-src /src/backend /app/backend
+COPY --from=frontend-build /frontend/dist /app/backend/frontend_dist
+
+RUN find /usr/local -type d -name "__pycache__" -prune -exec rm -rf {} + && \
+    find /app -type d -name "__pycache__" -prune -exec rm -rf {} +
+
+EXPOSE 8000
+
+CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]

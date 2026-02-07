@@ -1,0 +1,19 @@
+version: "3.9"
+services:
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    environment:
+      - RSS_DB_URL=sqlite:///./data/rss.sqlite
+      - RSS_SECRET_KEY=change_me
+      - RSS_ADMIN_EMAIL=${RSS_ADMIN_EMAIL}
+      - RSS_ADMIN_PASSWORD=${RSS_ADMIN_PASSWORD}
+    volumes:
+      - ./data:/app/data
+  frontend:
+    build: ./frontend
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
