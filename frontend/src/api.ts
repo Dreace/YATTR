@@ -293,6 +293,14 @@ export interface FeedUnreadCount {
   unread_count: number;
 }
 
+export interface HealthStatus {
+  feeds: number;
+  entries: number;
+  failed_feeds: number;
+  success_rate: number;
+  status: string;
+}
+
 export interface DebugEntry {
   id: number;
   feed_id: number;
@@ -379,7 +387,7 @@ export async function deleteFeed(feedId: number): Promise<void> {
 
 export async function fetchFeedNow(
   feedId: number,
-  background = false,
+  background = true,
 ): Promise<FeedFetchResult> {
   const response = await api.post(`/api/feeds/${feedId}/fetch`, null, {
     params: { background },
@@ -454,6 +462,11 @@ export async function getGeneralSettings(): Promise<GeneralSettings> {
   return response.data;
 }
 
+export async function fetchHealthStatus(): Promise<HealthStatus> {
+  const response = await api.get("/api/health");
+  return response.data;
+}
+
 export async function updateGeneralSettings(
   payload: GeneralSettings,
 ): Promise<GeneralSettings> {
@@ -505,7 +518,7 @@ export async function exportOpml(): Promise<string> {
 
 export async function debugRefreshFeed(
   feedId: number,
-  background = false,
+  background = true,
 ): Promise<DebugRefreshResult> {
   const response = await api.post(`/api/debug/feeds/${feedId}/refresh`, null, {
     params: { background },

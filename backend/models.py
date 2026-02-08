@@ -53,6 +53,31 @@ class Feed(Base):
     cleanup_retention_days: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
     cleanup_keep_content: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     image_cache_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    use_global_fetch_interval: Mapped[bool] = mapped_column(
+        Boolean,
+        default=True,
+        nullable=False,
+    )
+    use_global_fulltext: Mapped[bool] = mapped_column(
+        Boolean,
+        default=True,
+        nullable=False,
+    )
+    use_global_cleanup_retention: Mapped[bool] = mapped_column(
+        Boolean,
+        default=True,
+        nullable=False,
+    )
+    use_global_cleanup_keep_content: Mapped[bool] = mapped_column(
+        Boolean,
+        default=True,
+        nullable=False,
+    )
+    use_global_image_cache: Mapped[bool] = mapped_column(
+        Boolean,
+        default=True,
+        nullable=False,
+    )
 
     user: Mapped["User"] = relationship("User", back_populates="feeds")
     folder: Mapped["Folder | None"] = relationship("Folder", back_populates="feeds")

@@ -13,11 +13,15 @@ from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from tenacity import RetryError, retry, stop_after_attempt, wait_exponential
 
 from .cache_assets import cache_images_in_html, cache_site_favicon
-from .config import settings
+from .feed_settings import (
+    UserFeedDefaults,
+    default_user_feed_defaults,
+    resolve_effective_feed_settings,
+    resolve_user_feed_defaults,
+)
 from .models import Entry, Feed, FetchLog, User, UserEntryState
 from .network_safety import fetch_text_response
 from .rules import apply_filters
-from .services import ConfigStore
 from .text_extract import extract_fulltext
 
 try:
@@ -106,7 +110,13 @@ def fetch_feed(feed: Feed) -> feedparser.FeedParserDict:
         headers["If-Modified-Since"] = feed.last_modified
 
     with httpx.Client(timeout=20, follow_redirects=True) as client:
-        response, body_text = fetch_text_response(client, feed.url, headers=headers)
+        try:
+            response, body_text = fetch_text_response(client, feed.url, headers=headers)
+        except httpx.HTTPStatusError as exc:
+            if exc.response is not None and exc.response.status_code == 304:
+                feed.last_status = 304
+                return feedparser.FeedParserDict({"status": 304})
+            raise
         feed.last_status = response.status_code
         if response.status_code == 304:
             return feedparser.FeedParserDict({"status": 304})
@@ -126,17 +136,12 @@ def upsert_entries(db, feed: Feed, parsed: feedparser.FeedParserDict) -> int:
         return 0
 
     user = db.query(User).filter(User.id == feed.user_id).first()
-    global_fulltext_enabled = settings.fulltext_enabled
-    image_cache_enabled = False
-    if user:
-        global_fulltext_enabled = bool(
-            ConfigStore.get(user, "fulltext_enabled", settings.fulltext_enabled)
-        )
-        image_cache_enabled = bool(
-            ConfigStore.get(user, "image_cache_enabled", False)
-        )
-    effective_image_cache_enabled = bool(feed.image_cache_enabled) or image_cache_enabled
-    keep_content = bool(feed.cleanup_keep_content)
+    defaults = (
+        resolve_user_feed_defaults(user)
+        if user
+        else default_user_feed_defaults()
+    )
+    effective_settings = resolve_effective_feed_settings(feed, defaults)
 
     added = 0
     for item in parsed.entries:
@@ -161,16 +166,16 @@ def upsert_entries(db, feed: Feed, parsed: feedparser.FeedParserDict) -> int:
                 content_html = cast(str | None, first.get("value"))
         content_html = _sanitize_html(content_html)
         summary = _sanitize_html(summary)
-        if effective_image_cache_enabled:
+        if effective_settings.image_cache_enabled:
             base_for_assets = link or feed.site_url or feed.url
             content_html = cache_images_in_html(content_html, base_for_assets)
             summary = cache_images_in_html(summary, base_for_assets)
 
-        if global_fulltext_enabled or feed.fulltext_enabled:
+        if effective_settings.fulltext_enabled:
             content_text = extract_fulltext(link)
         else:
             content_text = cast(str | None, item.get("summary"))
-        if not keep_content:
+        if not effective_settings.cleanup_keep_content:
             content_html = None
             content_text = None
 
@@ -218,11 +223,22 @@ def upsert_entries(db, feed: Feed, parsed: feedparser.FeedParserDict) -> int:
 def iter_due_feeds(db) -> Iterable[Feed]:
     now_ts = int(time.time())
     feeds = db.query(Feed).filter(Feed.disabled.is_(False)).all()
+    defaults_by_user_id: dict[int, UserFeedDefaults] = {}
     for feed in feeds:
         if feed.error_count >= 10:
             feed.disabled = True
             continue
-        interval = feed.fetch_interval_min * 60
+        user_defaults = defaults_by_user_id.get(feed.user_id)
+        if user_defaults is None:
+            user = db.query(User).filter(User.id == feed.user_id).first()
+            user_defaults = (
+                resolve_user_feed_defaults(user)
+                if user
+                else default_user_feed_defaults()
+            )
+            defaults_by_user_id[feed.user_id] = user_defaults
+        effective_settings = resolve_effective_feed_settings(feed, user_defaults)
+        interval = effective_settings.fetch_interval_min * 60
         backoff = 1
         if feed.error_count >= 5:
             backoff = 24
@@ -245,7 +261,7 @@ def process_feed(db, feed: Feed) -> int:
         _refresh_feed_icon(feed)
         added = upsert_entries(db, feed, parsed)
         feed.last_fetch_at = int(time.time())
-        if feed.last_status == 200:
+        if feed.last_status in (200, 304):
             feed.error_count = 0
         logger.info(
             "feed_fetch result=success title=%s url=%s status=%s added=%s error=%s",

@@ -55,6 +55,7 @@ const messages = {
     "sidebar.add_feed.success": "添加成功",
     "sidebar.add_feed.fail": "添加失败，请检查 URL 是否有效",
     "sidebar.feeds": "订阅源",
+    "sidebar.feed.fetch_failed": "上次抓取失败",
     "sidebar.ungrouped": "未分组",
 
     "toolbar.filter.all": "全部",
@@ -130,11 +131,11 @@ const messages = {
     "settings.save": "保存全局设置",
 
     "settings.help.default_interval":
-      "系统定时抓取订阅源的默认间隔。新建订阅会使用该值，后续可在订阅编辑中单独调整。",
+      "系统定时抓取订阅源的默认间隔。未单独设置的订阅会持续继承该值。",
     "settings.help.retention_days":
       "清理任务会按这个天数删除较早文章。数值越小，占用空间越低。",
     "settings.help.fulltext":
-      "启用后，新建订阅默认尝试抽取正文。单个订阅可在编辑弹窗里单独关闭。",
+      "启用后，未单独设置的订阅会自动继承全文抽取开关。",
     "settings.help.keep_content":
       "关闭后，清理文章时会只保留标题和摘要，适合控制数据库体积。",
     "settings.help.image_cache":
@@ -150,13 +151,20 @@ const messages = {
     "settings.section.opml": "OPML",
     "settings.opml.import": "导入 OPML",
     "settings.opml.export": "导出 OPML",
+    "settings.section.health": "系统状态",
+    "settings.health.status": "状态",
+    "settings.health.feeds": "订阅源总数",
+    "settings.health.entries": "文章总数",
+    "settings.health.failed_feeds": "失败订阅源",
+    "settings.health.success_rate": "近期成功率",
+    "settings.health.load_failed": "系统状态加载失败",
 
     "settings.section.plugins": "插件管理",
     "settings.plugins.empty": "当前没有可用插件",
     "settings.plugins.no_items": "插件未返回可展示的设置项。",
     "settings.plugins.save": "保存插件配置",
     "settings.plugins.save.loading": "保存中...",
-    "settings.plugins.note": "插件配置将在下一次服务重启后完整生效。",
+    "settings.plugins.note": "插件启用状态保存后会立即生效。",
 
     "help.title": "选项说明",
     "help.aria": "查看「{title}」说明",
@@ -238,6 +246,7 @@ const messages = {
     "sidebar.add_feed.success": "Feed added",
     "sidebar.add_feed.fail": "Failed to add. Check the URL.",
     "sidebar.feeds": "Feeds",
+    "sidebar.feed.fetch_failed": "Last fetch failed",
     "sidebar.ungrouped": "Ungrouped",
 
     "toolbar.filter.all": "All",
@@ -313,11 +322,11 @@ const messages = {
     "settings.save": "Save settings",
 
     "settings.help.default_interval":
-      "Default fetch interval for new feeds. You can override per feed in the edit dialog.",
+      "Default fetch interval inherited by feeds that are not explicitly customized.",
     "settings.help.retention_days":
       "Older entries are cleaned after this many days.",
     "settings.help.fulltext":
-      "Enable full-text extraction for new feeds by default.",
+      "Feeds without explicit overrides inherit this full-text extraction switch.",
     "settings.help.keep_content":
       "If disabled, cleanup keeps only title and summary to reduce storage.",
     "settings.help.image_cache":
@@ -333,13 +342,20 @@ const messages = {
     "settings.section.opml": "OPML",
     "settings.opml.import": "Import OPML",
     "settings.opml.export": "Export OPML",
+    "settings.section.health": "Health",
+    "settings.health.status": "Status",
+    "settings.health.feeds": "Feeds",
+    "settings.health.entries": "Entries",
+    "settings.health.failed_feeds": "Failed feeds",
+    "settings.health.success_rate": "Recent success rate",
+    "settings.health.load_failed": "Failed to load health status",
 
     "settings.section.plugins": "Plugins",
     "settings.plugins.empty": "No available plugins",
     "settings.plugins.no_items": "This plugin provides no visible settings.",
     "settings.plugins.save": "Save plugins",
     "settings.plugins.save.loading": "Saving...",
-    "settings.plugins.note": "Plugin changes take full effect after restart.",
+    "settings.plugins.note": "Plugin enablement changes take effect immediately.",
 
     "help.title": "Help",
     "help.aria": "Show help for {title}",

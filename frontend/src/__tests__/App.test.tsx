@@ -161,6 +161,13 @@ vi.mock("../api", () => ({
     auto_refresh_interval_sec: 0,
     time_format: "YYYY-MM-DD HH:mm:ss",
   }),
+  fetchHealthStatus: vi.fn().mockResolvedValue({
+    feeds: 1,
+    entries: 2,
+    failed_feeds: 0,
+    success_rate: 1,
+    status: "ok",
+  }),
   updateGeneralSettings: vi.fn().mockResolvedValue({
     default_fetch_interval_min: 35,
     fulltext_enabled: false,
@@ -416,6 +423,8 @@ it("opens settings drawer and saves global/plugin settings", async () => {
   expect(api.updatePluginSettings).toHaveBeenCalled();
   expect(screen.getByText("API 路径:")).toBeInTheDocument();
   expect(screen.getByText("API 地址:")).toBeInTheDocument();
+  expect(screen.getByText("系统状态")).toBeInTheDocument();
+  expect(screen.getByText("近期成功率:")).toBeInTheDocument();
 });
 
 it("supports language switch and system-follow mode", async () => {
@@ -451,7 +460,7 @@ it("shows setting help as hover tooltip instead of dialog", async () => {
   const tooltipRoot = helpIcon.closest(".ui-tooltip");
   expect(tooltipRoot).toHaveAttribute(
     "title",
-    "启用后，新建订阅默认尝试抽取正文。单个订阅可在编辑弹窗里单独关闭。",
+    "启用后，未单独设置的订阅会自动继承全文抽取开关。",
   );
   expect(
     screen.queryByRole("dialog", { name: "启用全文抽取（全局）" }),

@@ -1,11 +1,14 @@
+# syntax=docker/dockerfile:1.7
+
 FROM python:3.12-slim
 
 WORKDIR /app
 
-RUN pip install --no-cache-dir -U pip && pip install --no-cache-dir uv
+COPY --from=ghcr.io/astral-sh/uv:0.5.14 /uv /uvx /bin/
 
 COPY requirements.txt /app/requirements.txt
-RUN uv pip install --system -r requirements.txt
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install --system -r requirements.txt
 
 COPY . /app
 

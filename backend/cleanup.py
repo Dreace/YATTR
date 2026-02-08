@@ -9,6 +9,7 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from .cache_assets import image_cache_dir
+from .feed_settings import resolve_effective_feed_settings, resolve_user_feed_defaults
 from .models import Entry, Feed, FetchLog, User, UserEntryState
 
 logger = logging.getLogger("uvicorn.error")
@@ -55,9 +56,11 @@ def cleanup_old_entries(db: Session) -> dict[str, int]:
     image_root = image_cache_dir()
 
     for user in users:
+        user_defaults = resolve_user_feed_defaults(user)
         feeds = db.query(Feed).filter(Feed.user_id == user.id).all()
         for feed in feeds:
-            retention_days = max(1, min(int(feed.cleanup_retention_days), 3650))
+            effective_settings = resolve_effective_feed_settings(feed, user_defaults)
+            retention_days = effective_settings.cleanup_retention_days
             cutoff_ts = now_ts - retention_days * 86400
             deleted_logs += (
                 db.query(FetchLog)

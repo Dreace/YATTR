@@ -225,11 +225,123 @@ def test_feed_update_delete_and_fetch(monkeypatch: pytest.MonkeyPatch):
     assert response.json()["icon_url"] == "/api/cache/favicons/updated-icon.svg"
 
     monkeypatch.setattr(main, "process_feed", lambda db, feed: 0)
-    response = client.post(f"/api/feeds/{feed_id}/fetch", headers=headers)
+    response = client.post(
+        f"/api/feeds/{feed_id}/fetch?background=false",
+        headers=headers,
+    )
     assert response.status_code == 200
 
     response = client.delete(f"/api/feeds/{feed_id}", headers=headers)
     assert response.status_code == 200
+
+
+def test_feed_uses_global_settings_when_not_overridden():
+    headers = _auth_headers()
+
+    initial_settings = {
+        "default_fetch_interval_min": 45,
+        "fulltext_enabled": True,
+        "cleanup_retention_days": 90,
+        "cleanup_keep_content": False,
+        "image_cache_enabled": True,
+        "auto_refresh_interval_sec": 0,
+        "time_format": "YYYY-MM-DD HH:mm:ss",
+    }
+    response = client.put(
+        "/api/settings/general",
+        headers=headers,
+        json=initial_settings,
+    )
+    assert response.status_code == 200
+
+    created = client.post(
+        "/api/feeds",
+        headers=headers,
+        json={"title": "Inherited", "url": "https://inherit.example.com/rss"},
+    )
+    assert created.status_code == 200
+    feed_id = created.json()["id"]
+    assert created.json()["fetch_interval_min"] == 45
+    assert created.json()["fulltext_enabled"] is True
+    assert created.json()["cleanup_retention_days"] == 90
+    assert created.json()["cleanup_keep_content"] is False
+    assert created.json()["image_cache_enabled"] is True
+
+    with SessionLocal() as db:
+        feed = db.query(Feed).filter(Feed.id == feed_id).first()
+        assert feed is not None
+        assert feed.use_global_fetch_interval is True
+        assert feed.use_global_fulltext is True
+        assert feed.use_global_cleanup_retention is True
+        assert feed.use_global_cleanup_keep_content is True
+        assert feed.use_global_image_cache is True
+
+    updated_settings = {
+        "default_fetch_interval_min": 60,
+        "fulltext_enabled": False,
+        "cleanup_retention_days": 120,
+        "cleanup_keep_content": True,
+        "image_cache_enabled": False,
+        "auto_refresh_interval_sec": 0,
+        "time_format": "YYYY-MM-DD HH:mm:ss",
+    }
+    response = client.put(
+        "/api/settings/general",
+        headers=headers,
+        json=updated_settings,
+    )
+    assert response.status_code == 200
+
+    listed = client.get("/api/feeds", headers=headers)
+    assert listed.status_code == 200
+    inherited = next(feed for feed in listed.json() if feed["id"] == feed_id)
+    assert inherited["fetch_interval_min"] == 60
+    assert inherited["fulltext_enabled"] is False
+    assert inherited["cleanup_retention_days"] == 120
+    assert inherited["cleanup_keep_content"] is True
+    assert inherited["image_cache_enabled"] is False
+
+    customized = client.put(
+        f"/api/feeds/{feed_id}",
+        headers=headers,
+        json={
+            "title": "Inherited",
+            "url": "https://inherit.example.com/rss",
+            "fetch_interval_min": 15,
+            "fulltext_enabled": False,
+            "cleanup_retention_days": 120,
+            "cleanup_keep_content": True,
+            "image_cache_enabled": False,
+        },
+    )
+    assert customized.status_code == 200
+    assert customized.json()["fetch_interval_min"] == 15
+    assert customized.json()["fulltext_enabled"] is False
+
+    latest_settings = {
+        "default_fetch_interval_min": 30,
+        "fulltext_enabled": True,
+        "cleanup_retention_days": 30,
+        "cleanup_keep_content": False,
+        "image_cache_enabled": True,
+        "auto_refresh_interval_sec": 0,
+        "time_format": "YYYY-MM-DD HH:mm:ss",
+    }
+    response = client.put(
+        "/api/settings/general",
+        headers=headers,
+        json=latest_settings,
+    )
+    assert response.status_code == 200
+
+    listed = client.get("/api/feeds", headers=headers)
+    assert listed.status_code == 200
+    resolved = next(feed for feed in listed.json() if feed["id"] == feed_id)
+    assert resolved["fetch_interval_min"] == 15
+    assert resolved["fulltext_enabled"] is True
+    assert resolved["cleanup_retention_days"] == 30
+    assert resolved["cleanup_keep_content"] is False
+    assert resolved["image_cache_enabled"] is True
 
 
 def test_search_and_filters():
@@ -316,7 +428,10 @@ def test_fetch_logs_and_health():
         )
         db.commit()
 
-    response = client.get("/api/health")
+    unauthorized = client.get("/api/health")
+    assert unauthorized.status_code == 401
+
+    response = client.get("/api/health", headers=headers)
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
 
@@ -500,20 +615,27 @@ def test_plugin_settings_endpoints():
     assert "fever" in updated.json()["enabled"]
 
 
-def test_plugin_settings_keep_env_baseline():
+def test_plugin_settings_can_disable_all():
     headers = _auth_headers()
-    with SessionLocal() as db:
-        admin = db.query(main.User).filter(main.User.email == "admin@example.com").first()
-        assert admin is not None
-        main.ConfigStore.set(admin, "enabled_plugins", [])
-        db.commit()
+    enable = client.put(
+        "/api/settings/plugins",
+        headers=headers,
+        json={"enabled": ["fever"]},
+    )
+    assert enable.status_code == 200
+    assert "fever" in enable.json()["enabled"]
+
+    disable = client.put(
+        "/api/settings/plugins",
+        headers=headers,
+        json={"enabled": []},
+    )
+    assert disable.status_code == 200
+    assert disable.json()["enabled"] == []
 
     got = client.get("/api/settings/plugins", headers=headers)
     assert got.status_code == 200
-    assert "fever" in got.json()["enabled"]
-
-    fever_settings = client.get("/plugins/fever/settings", headers=headers)
-    assert fever_settings.status_code == 200
+    assert got.json()["enabled"] == []
 
 
 def test_search_scope():
@@ -523,6 +645,47 @@ def test_search_scope():
 
     response = client.get("/api/search?q=Summary&scope=invalid", headers=headers)
     assert response.status_code == 400
+
+
+def test_search_with_special_query_tokens_falls_back_to_like():
+    headers = _auth_headers()
+    entry_id = 0
+    with SessionLocal() as db:
+        admin = db.query(main.User).filter(main.User.email == "admin@example.com").first()
+        assert admin is not None
+        feed = Feed(user_id=admin.id, title="Search Feed", url="https://example.com/search")
+        db.add(feed)
+        db.flush()
+        entry = Entry(
+            feed_id=feed.id,
+            guid="search-special",
+            url="https://example.com/search-special",
+            title="Status report",
+            author="A",
+            published_at=1,
+            summary="Report: daily digest",
+            content_html="<p>Report: daily digest</p>",
+            content_text="Report: daily digest",
+            hash="search-special-hash",
+        )
+        db.add(entry)
+        db.flush()
+        entry_id = entry.id
+        db.add(
+            UserEntryState(
+                user_id=admin.id,
+                entry_id=entry.id,
+                is_read=False,
+                is_starred=False,
+                is_later=False,
+                read_at=0,
+            )
+        )
+        db.commit()
+
+    response = client.get("/api/search?q=Report:&scope=all", headers=headers)
+    assert response.status_code == 200
+    assert any(item["id"] == entry_id for item in response.json())
 
 
 def test_validate_feed_url(monkeypatch: pytest.MonkeyPatch):
@@ -591,7 +754,10 @@ def test_debug_refresh_and_logs(monkeypatch: pytest.MonkeyPatch):
     feed_id = response.json()["id"]
 
     monkeypatch.setattr(main, "process_feed", lambda db, feed: 2)
-    refresh = client.post(f"/api/debug/feeds/{feed_id}/refresh", headers=headers)
+    refresh = client.post(
+        f"/api/debug/feeds/{feed_id}/refresh?background=false",
+        headers=headers,
+    )
     assert refresh.status_code == 200
     assert refresh.json()["ok"] is True
     assert refresh.json()["added"] == 2
@@ -632,6 +798,20 @@ def test_background_fetch_endpoints(monkeypatch: pytest.MonkeyPatch):
     feed_id = response.json()["id"]
 
     monkeypatch.setattr(main, "_process_feed_in_background", lambda feed_id, user_id: None)
+
+    default_fetch = client.post(
+        f"/api/feeds/{feed_id}/fetch",
+        headers=headers,
+    )
+    assert default_fetch.status_code == 200
+    assert default_fetch.json()["queued"] is True
+
+    default_debug = client.post(
+        f"/api/debug/feeds/{feed_id}/refresh",
+        headers=headers,
+    )
+    assert default_debug.status_code == 200
+    assert default_debug.json()["queued"] is True
 
     queued_fetch = client.post(
         f"/api/feeds/{feed_id}/fetch?background=true",

@@ -31,20 +31,20 @@ def iter_enabled_plugins() -> Iterable[str]:
     if settings.plugins.strip() == "":
         return []
     configured = [p.strip() for p in settings.plugins.split(",") if p.strip()]
-    if configured:
-        seen: set[str] = set()
-        ordered: list[str] = []
-        for name in configured:
-            if name in seen:
-                continue
-            seen.add(name)
-            ordered.append(name)
-        return ordered
-    return _discover_plugins()
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for name in configured:
+        if name in seen:
+            continue
+        seen.add(name)
+        ordered.append(name)
+    return ordered
 
 
 def load_plugins(app) -> None:
-    for plugin_name in iter_enabled_plugins():
+    # Always register all discoverable plugins so enabling/disabling
+    # from settings can take effect immediately without restart.
+    for plugin_name in list_available_plugins():
         module_path = f"backend.plugins.{plugin_name}.plugin"
         try:
             module = importlib.import_module(module_path)

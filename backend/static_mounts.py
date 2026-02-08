@@ -49,7 +49,10 @@ def mount_frontend_static(app: FastAPI) -> None:
     def frontend_spa(full_path: str):  # type: ignore[override]
         if full_path.startswith(("api/", "fever/", "plugins/")):
             raise HTTPException(status_code=404, detail="Not found")
-        target = dist / full_path
+        dist_root = dist.resolve()
+        target = (dist / full_path).resolve()
+        if target != dist_root and dist_root not in target.parents:
+            raise HTTPException(status_code=404, detail="Not found")
         if target.exists() and target.is_file():
             return FileResponse(target)
         return FileResponse(dist / "index.html")

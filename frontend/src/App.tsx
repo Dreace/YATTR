@@ -11,6 +11,7 @@ import {
   fetchEntries,
   fetchFeeds,
   fetchFolders,
+  fetchHealthStatus,
   fetchPluginProvidedSettings,
   fetchPluginSettings,
   fetchUnreadCounts,
@@ -31,6 +32,7 @@ import {
   type FetchLog,
   type Folder,
   type GeneralSettings,
+  type HealthStatus,
   type PluginProvidedSettings,
   type PluginSettingAction,
   type PluginSettings,
@@ -177,6 +179,11 @@ function formatDateByPattern(date: Date, format: string): string {
   );
 }
 
+function formatSuccessRate(value: number): string {
+  const clamped = Math.min(1, Math.max(0, value || 0));
+  return `${(clamped * 100).toFixed(1)}%`;
+}
+
 export default function App() {
   const { signOut } = useAuth();
   const { t, mode: langMode, setMode: setLangMode } = useI18n();
@@ -227,6 +234,9 @@ export default function App() {
     Record<string, boolean>
   >({});
   const [savingPlugins, setSavingPlugins] = useState(false);
+  const [healthStatus, setHealthStatus] = useState<HealthStatus | null>(null);
+  const [healthLoading, setHealthLoading] = useState(false);
+  const [healthLoadFailed, setHealthLoadFailed] = useState(false);
 
   const [debugFeedId, setDebugFeedId] = useState<number | null>(null);
   const [debugLogs, setDebugLogs] = useState<FetchLog[]>([]);
@@ -780,6 +790,19 @@ export default function App() {
     URL.revokeObjectURL(url);
   };
 
+  const loadHealthStatus = async () => {
+    setHealthLoading(true);
+    setHealthLoadFailed(false);
+    try {
+      const status = await fetchHealthStatus();
+      setHealthStatus(status);
+    } catch {
+      setHealthLoadFailed(true);
+    } finally {
+      setHealthLoading(false);
+    }
+  };
+
   const handleValidateAndAddFeed = async () => {
     const url = newFeedUrl.trim();
     if (!url) {
@@ -796,11 +819,6 @@ export default function App() {
         url,
         site_url: validated.site_url ?? null,
         folder_id: newFeedFolderId,
-        fetch_interval_min: settingsDraft.default_fetch_interval_min,
-        fulltext_enabled: settingsDraft.fulltext_enabled,
-        cleanup_retention_days: settingsDraft.cleanup_retention_days,
-        cleanup_keep_content: settingsDraft.cleanup_keep_content,
-        image_cache_enabled: settingsDraft.image_cache_enabled,
       });
       setNewFeedUrl("");
       setNewFeedMessage(t("sidebar.add_feed.success"));
@@ -1090,6 +1108,13 @@ export default function App() {
   }, [debugOpen, debugFeedId]);
 
   useEffect(() => {
+    if (!settingsOpen) {
+      return;
+    }
+    void loadHealthStatus();
+  }, [settingsOpen]);
+
+  useEffect(() => {
     const onKeydown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
       if (target && ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName)) {
@@ -1311,6 +1336,18 @@ export default function App() {
                             ) : (
                               <span className="feed-icon placeholder" />
                             )}
+                            {(feed.error_count ?? 0) > 0 ? (
+                              <UITooltip content={t("sidebar.feed.fetch_failed")}>
+                                <span
+                                  className="feed-error-indicator"
+                                  role="img"
+                                  aria-label={t("sidebar.feed.fetch_failed")}
+                                  title={t("sidebar.feed.fetch_failed")}
+                                >
+                                  !
+                                </span>
+                              </UITooltip>
+                            ) : null}
                             <span className="feed-text">{feed.title}</span>
                           </span>
                           <UIBadge>{unreadByFeed.get(feed.id) ?? 0}</UIBadge>
@@ -1356,6 +1393,18 @@ export default function App() {
                             ) : (
                               <span className="feed-icon placeholder" />
                             )}
+                            {(feed.error_count ?? 0) > 0 ? (
+                              <UITooltip content={t("sidebar.feed.fetch_failed")}>
+                                <span
+                                  className="feed-error-indicator"
+                                  role="img"
+                                  aria-label={t("sidebar.feed.fetch_failed")}
+                                  title={t("sidebar.feed.fetch_failed")}
+                                >
+                                  !
+                                </span>
+                              </UITooltip>
+                            ) : null}
                             <span className="feed-text">{feed.title}</span>
                           </span>
                           <UIBadge>{unreadByFeed.get(feed.id) ?? 0}</UIBadge>
@@ -2028,6 +2077,44 @@ export default function App() {
         <UISeparator />
 
         <section className="drawer-section">
+          <h4>{t("settings.section.health")}</h4>
+          {healthLoading ? (
+            <div className="muted-text">{t("common.loading")}</div>
+          ) : null}
+          {!healthLoading && healthLoadFailed ? (
+            <div className="error-text">{t("settings.health.load_failed")}</div>
+          ) : null}
+          {!healthLoading && !healthLoadFailed && healthStatus ? (
+            <div className="feed-setting-list">
+              <div className="feed-setting-item">
+                <div className="key-line">
+                  <span>{t("settings.health.status")}:</span>
+                  <span>{healthStatus.status}</span>
+                </div>
+                <div className="key-line">
+                  <span>{t("settings.health.feeds")}:</span>
+                  <span>{healthStatus.feeds}</span>
+                </div>
+                <div className="key-line">
+                  <span>{t("settings.health.entries")}:</span>
+                  <span>{healthStatus.entries}</span>
+                </div>
+                <div className="key-line">
+                  <span>{t("settings.health.failed_feeds")}:</span>
+                  <span>{healthStatus.failed_feeds}</span>
+                </div>
+                <div className="key-line">
+                  <span>{t("settings.health.success_rate")}:</span>
+                  <span>{formatSuccessRate(healthStatus.success_rate)}</span>
+                </div>
+              </div>
+            </div>
+          ) : null}
+        </section>
+
+        <UISeparator />
+
+        <section className="drawer-section">
           <h4>{t("settings.section.plugins")}</h4>
           <div className="feed-setting-list">
             {pluginSettings.available.map((name) => (
@@ -2219,8 +2306,11 @@ export default function App() {
         <footer className="app-footer">
           {t("footer.current_feed", {
             title: selectedFeedObject.title,
-            interval: selectedFeedObject.fetch_interval_min ?? 30,
-            status: selectedFeedObject.fulltext_enabled
+            interval:
+              selectedFeedObject.fetch_interval_min ??
+              settingsDraft.default_fetch_interval_min,
+            status: (selectedFeedObject.fulltext_enabled ??
+              settingsDraft.fulltext_enabled)
               ? t("common.enabled")
               : t("common.disabled"),
           })}

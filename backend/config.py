@@ -56,7 +56,9 @@ class Settings:
     admin_email: str = _env("RSS_ADMIN_EMAIL", "admin")
     admin_password: str = _env("RSS_ADMIN_PASSWORD", "change_me")
     db_url: str = _env("RSS_DB_URL", "sqlite:///./data/rss.sqlite")
-    plugins: str = _env("RSS_PLUGINS", "fever")
+    # Runtime plugin enabling is controlled via /api/settings/plugins.
+    # Keep default empty so no plugin is enabled unless explicitly configured.
+    plugins: str = ""
     fulltext_enabled: bool = _env_bool("RSS_FULLTEXT_ENABLED", False)
     testing: bool = _env_bool("RSS_TESTING", False)
     auth_access_token_minutes: int = _env_int("RSS_AUTH_ACCESS_TOKEN_MINUTES", 15)

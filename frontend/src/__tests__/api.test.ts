@@ -68,6 +68,7 @@ import {
   getAccessToken,
   fetchPluginProvidedSettings,
   fetchPluginSettings,
+  fetchHealthStatus,
   fetchUnreadCounts,
   getGeneralSettings,
   importOpml,
@@ -269,6 +270,9 @@ it("updates feed and general settings", async () => {
   await getGeneralSettings();
   expect(getMock).toHaveBeenCalledWith("/api/settings/general");
 
+  await fetchHealthStatus();
+  expect(getMock).toHaveBeenCalledWith("/api/health");
+
   await updateGeneralSettings({
     default_fetch_interval_min: 30,
     fulltext_enabled: false,
@@ -383,11 +387,11 @@ it("imports and exports opml", async () => {
 it("calls debug endpoints", async () => {
   await fetchFeedNow(1);
   expect(postMock).toHaveBeenCalledWith("/api/feeds/1/fetch", null, {
-    params: { background: false },
+    params: { background: true },
   });
   await debugRefreshFeed(1);
   expect(postMock).toHaveBeenCalledWith("/api/debug/feeds/1/refresh", null, {
-    params: { background: false },
+    params: { background: true },
   });
   await fetchDebugFeedLogs(1);
   expect(getMock).toHaveBeenCalledWith("/api/debug/feeds/1/logs");

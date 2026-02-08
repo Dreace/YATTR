@@ -393,6 +393,14 @@ a {
   white-space: nowrap;
 }
 
+.feed-error-indicator {
+  color: var(--error-strong-text);
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1;
+  flex: 0 0 auto;
+}
+
 .add-feed-form {
   display: grid;
   gap: var(--space-2);

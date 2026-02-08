@@ -61,11 +61,11 @@ class FeedIn(BaseModel):
     url: str
     site_url: Optional[str] = None
     folder_id: Optional[int] = None
-    fetch_interval_min: int = 30
-    fulltext_enabled: bool = False
-    cleanup_retention_days: int = 30
-    cleanup_keep_content: bool = True
-    image_cache_enabled: bool = False
+    fetch_interval_min: Optional[int] = None
+    fulltext_enabled: Optional[bool] = None
+    cleanup_retention_days: Optional[int] = None
+    cleanup_keep_content: Optional[bool] = None
+    image_cache_enabled: Optional[bool] = None
 
 
 class FeedOut(FeedIn):

@@ -9,6 +9,8 @@ from pathlib import Path
 import feedparser
 import httpx
 import pytest
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import sessionmaker
 
 os.environ.setdefault("RSS_DB_URL", "sqlite:///./data/test.sqlite")
 os.environ.setdefault("RSS_SECRET_KEY", "test-secret")
@@ -23,9 +25,15 @@ from backend import main as app_main
 from backend.cache_assets import cache_site_favicon, favicon_cache_dir, image_cache_dir
 from backend.cleanup import cleanup_old_entries
 from backend.config import settings
-from backend.db import SessionLocal, init_db, engine
+from backend.db import LATEST_SCHEMA_VERSION, SessionLocal, init_db, migrate_schema, engine
 from backend.dependencies import get_current_user
-from backend.fetcher import format_fetch_error, iter_due_feeds, process_feed, upsert_entries
+from backend.fetcher import (
+    fetch_feed,
+    format_fetch_error,
+    iter_due_feeds,
+    process_feed,
+    upsert_entries,
+)
 from backend.models import Entry, Feed, FetchLog, FilterRule, Folder, User, UserEntryState
 from backend.plugin_loader import iter_enabled_plugins, load_plugins
 from backend.plugins.fever import plugin as fever_plugin
@@ -86,6 +94,192 @@ def setup_module(module):
 
 def teardown_module(module):
     engine.dispose()
+
+
+def test_migrate_schema_supports_cross_version_upgrade(tmp_path: Path):
+    db_path = tmp_path / "legacy.sqlite"
+    legacy_engine = create_engine(f"sqlite:///{db_path}", future=True)
+    LegacySession = sessionmaker(
+        bind=legacy_engine,
+        autoflush=False,
+        autocommit=False,
+        future=True,
+    )
+    with LegacySession() as db:
+        db.execute(
+            text(
+                """
+                CREATE TABLE users (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    email TEXT NOT NULL,
+                    password_hash TEXT NOT NULL,
+                    settings_json TEXT NOT NULL
+                );
+                """
+            )
+        )
+        db.execute(
+            text(
+                """
+                CREATE TABLE feeds (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    folder_id INTEGER,
+                    title TEXT NOT NULL,
+                    url TEXT NOT NULL,
+                    fetch_interval_min INTEGER NOT NULL DEFAULT 30,
+                    last_fetch_at INTEGER NOT NULL DEFAULT 0,
+                    last_status INTEGER NOT NULL DEFAULT 0,
+                    error_count INTEGER NOT NULL DEFAULT 0,
+                    disabled BOOLEAN NOT NULL DEFAULT 0,
+                    fulltext_enabled BOOLEAN NOT NULL DEFAULT 0,
+                    cleanup_retention_days INTEGER NOT NULL DEFAULT 30,
+                    cleanup_keep_content BOOLEAN NOT NULL DEFAULT 1,
+                    image_cache_enabled BOOLEAN NOT NULL DEFAULT 0
+                );
+                """
+            )
+        )
+        db.execute(
+            text(
+                """
+                CREATE TABLE entries (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    feed_id INTEGER NOT NULL,
+                    guid TEXT,
+                    url TEXT,
+                    title TEXT NOT NULL,
+                    author TEXT,
+                    published_at INTEGER NOT NULL,
+                    summary TEXT,
+                    content_html TEXT,
+                    content_text TEXT,
+                    hash TEXT NOT NULL
+                );
+                """
+            )
+        )
+        db.execute(
+            text(
+                """
+                CREATE TABLE user_entry_state (
+                    user_id INTEGER NOT NULL,
+                    entry_id INTEGER NOT NULL,
+                    is_read BOOLEAN NOT NULL DEFAULT 0,
+                    is_starred BOOLEAN NOT NULL DEFAULT 0,
+                    is_later BOOLEAN NOT NULL DEFAULT 0,
+                    read_at INTEGER NOT NULL DEFAULT 0,
+                    PRIMARY KEY (user_id, entry_id)
+                );
+                """
+            )
+        )
+        db.execute(
+            text(
+                """
+                INSERT INTO users (id, email, password_hash, settings_json)
+                VALUES (:id, :email, :password_hash, :settings_json);
+                """
+            ),
+            {
+                "id": 1,
+                "email": "legacy@example.com",
+                "password_hash": "x",
+                "settings_json": (
+                    '{"default_fetch_interval_min":15,"fulltext_enabled":true,'
+                    '"cleanup_retention_days":7,"cleanup_keep_content":false,'
+                    '"image_cache_enabled":true}'
+                ),
+            },
+        )
+        db.execute(
+            text(
+                """
+                INSERT INTO feeds (
+                    id, user_id, title, url, fetch_interval_min, fulltext_enabled,
+                    cleanup_retention_days, cleanup_keep_content, image_cache_enabled
+                ) VALUES (
+                    :id, :user_id, :title, :url,
+                    :fetch_interval_min, :fulltext_enabled, :cleanup_retention_days,
+                    :cleanup_keep_content, :image_cache_enabled
+                );
+                """
+            ),
+            {
+                "id": 1,
+                "user_id": 1,
+                "title": "Legacy Feed",
+                "url": "https://legacy.example.com/rss",
+                "fetch_interval_min": 15,
+                "fulltext_enabled": True,
+                "cleanup_retention_days": 30,
+                "cleanup_keep_content": True,
+                "image_cache_enabled": False,
+            },
+        )
+        db.execute(
+            text(
+                """
+                INSERT INTO entries (
+                    id, feed_id, guid, url, title, author, published_at,
+                    summary, content_html, content_text, hash
+                ) VALUES (
+                    :id, :feed_id, :guid, :url,
+                    :title, :author, :published_at,
+                    :summary, :content_html, :content_text, :hash
+                );
+                """
+            ),
+            {
+                "id": 1,
+                "feed_id": 1,
+                "guid": "legacy-1",
+                "url": "https://legacy.example.com/post",
+                "title": "Legacy title",
+                "author": "legacy",
+                "published_at": 1,
+                "summary": "Legacy summary",
+                "content_html": "<p>Legacy summary</p>",
+                "content_text": "Legacy summary",
+                "hash": "legacy-hash",
+            },
+        )
+        db.commit()
+
+    with LegacySession() as db:
+        version = migrate_schema(db)
+        db.commit()
+        assert version == LATEST_SCHEMA_VERSION
+
+    with LegacySession() as db:
+        migration_version = db.execute(
+            text("SELECT version FROM schema_migrations WHERE id = 1;")
+        ).scalar_one()
+        assert int(migration_version) == LATEST_SCHEMA_VERSION
+
+        feed_row = db.execute(
+            text(
+                """
+                SELECT
+                    use_global_fetch_interval,
+                    use_global_fulltext,
+                    use_global_cleanup_retention,
+                    use_global_cleanup_keep_content,
+                    use_global_image_cache
+                FROM feeds
+                WHERE id = 1;
+                """
+            )
+        ).fetchone()
+        assert feed_row is not None
+        assert int(feed_row[0]) == 1
+        assert int(feed_row[1]) == 1
+        assert int(feed_row[2]) == 0
+        assert int(feed_row[3]) == 0
+        assert int(feed_row[4]) == 0
+
+        fts_count = db.execute(text("SELECT count(*) FROM entries_fts;")).scalar_one()
+        assert int(fts_count) >= 1
 
 
 def test_get_current_user_dependency():
@@ -449,6 +643,26 @@ def test_fever_route_not_shadowed_by_frontend_spa(
     assert "auth" in response.json()
 
 
+def test_frontend_spa_blocks_path_traversal(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+):
+    dist = tmp_path / "frontend_dist"
+    dist.mkdir()
+    (dist / "index.html").write_text("<html>ok</html>", encoding="utf-8")
+    secret = tmp_path / "secret.txt"
+    secret.write_text("secret", encoding="utf-8")
+
+    monkeypatch.setattr("backend.static_mounts.frontend_dist", lambda: dist)
+
+    app = FastAPI()
+    mount_frontend_static(app)
+
+    client = TestClient(app)
+    response = client.get("/..%2Fsecret.txt")
+    assert response.status_code == 404
+
+
 def test_upsert_entries_adds_state():
     with SessionLocal() as db:
         user = User(email="u2@example.com", password_hash="x", settings_json="{}")
@@ -588,6 +802,47 @@ def test_process_feed_success(monkeypatch: pytest.MonkeyPatch):
         assert feed.icon_url == "/api/cache/favicons/new.svg"
 
 
+def test_process_feed_304_resets_error_count(monkeypatch: pytest.MonkeyPatch):
+    with SessionLocal() as db:
+        user = User(email="not-modified@example.com", password_hash="x", settings_json="{}")
+        db.add(user)
+        db.flush()
+        feed = Feed(
+            user_id=user.id,
+            title="Old",
+            url="u",
+            fetch_interval_min=1,
+            error_count=3,
+        )
+        db.add(feed)
+        db.commit()
+
+        def _fake_fetch(_feed):
+            _feed.last_status = 304
+            return feedparser.FeedParserDict({"status": 304})
+
+        monkeypatch.setattr("backend.fetcher.fetch_feed", _fake_fetch)
+        added = process_feed(db, feed)
+        db.commit()
+        assert added == 0
+        assert feed.last_status == 304
+        assert feed.error_count == 0
+
+
+def test_fetch_feed_handles_http_304_without_exception(monkeypatch: pytest.MonkeyPatch):
+    feed = Feed(user_id=1, title="T", url="https://example.com/rss", fetch_interval_min=1)
+
+    def _raise_304(_client, _url, *, headers=None):
+        request = httpx.Request("GET", _url)
+        response = httpx.Response(304, request=request)
+        raise httpx.HTTPStatusError("Not Modified", request=request, response=response)
+
+    monkeypatch.setattr("backend.fetcher.fetch_text_response", _raise_304)
+    parsed = fetch_feed(feed)
+    assert parsed.get("status") == 304
+    assert feed.last_status == 304
+
+
 def test_process_feed_icon_refresh_failure_is_ignored(monkeypatch: pytest.MonkeyPatch):
     with SessionLocal() as db:
         user = User(email="iconfail@example.com", password_hash="x", settings_json="{}")
@@ -629,7 +884,7 @@ def test_process_feed_icon_refresh_failure_is_ignored(monkeypatch: pytest.Monkey
         assert feed.icon_url == "/api/cache/favicons/old.svg"
 
 
-def test_load_plugins_registers_routes():
+def test_load_plugins_registers_routes(monkeypatch: pytest.MonkeyPatch):
     app = FastAPI()
 
     class DummyPlugin:
@@ -641,14 +896,12 @@ def test_load_plugins_registers_routes():
 
     sys.modules["backend.plugins.dummy.plugin"] = DummyPlugin
 
-    original = settings.plugins
-    object.__setattr__(settings, "plugins", "dummy")
+    monkeypatch.setattr("backend.plugin_loader.list_available_plugins", lambda: ["dummy"])
     load_plugins(app)
     client = TestClient(app)
     response = client.get("/dummy")
     assert response.status_code == 200
     assert response.json()["ok"] is True
-    object.__setattr__(settings, "plugins", original)
 
 
 def test_start_scheduler_runs_and_stops():
@@ -670,8 +923,14 @@ def test_shutdown_scheduler_instance_calls_non_blocking_shutdown():
 
 
 def test_plugin_loader_defaults():
-    plugins = list(iter_enabled_plugins())
-    assert "fever" in plugins
+    original = settings.plugins
+    try:
+        object.__setattr__(settings, "plugins", "")
+        assert list(iter_enabled_plugins()) == []
+        object.__setattr__(settings, "plugins", "fever,fever,dummy")
+        assert list(iter_enabled_plugins()) == ["fever", "dummy"]
+    finally:
+        object.__setattr__(settings, "plugins", original)
 
 
 def test_text_extract_none():

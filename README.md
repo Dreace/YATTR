@@ -39,7 +39,13 @@ docker compose up --build
 - 前端：`http://localhost:5173`
 - 后端：`http://localhost:8000`
 
-### 2.2 本地运行
+### 2.2 使用远程镜像（Docker）
+
+```bash
+docker compose -f docker-compose.remote.yml up -d
+```
+
+### 2.3 本地运行
 
 后端（Windows）：
 
@@ -156,3 +162,27 @@ npm.cmd run dev
 
 - 单容器默认对外端口是 `8001`，不是 `8000`。
 - 用 `docker compose -f docker-compose.single.yml ps` 确认容器是否正常运行。
+
+## 7. GitHub Actions 自动构建 Docker 镜像
+
+仓库已包含工作流：`.github/workflows/docker-publish.yml`。  
+触发条件：
+
+- push 到 `main`
+- push `v*` 标签（例如 `v1.0.0`）
+- 手动触发（`workflow_dispatch`）
+
+首次使用前请在 GitHub 仓库配置以下项目：
+
+1. `Settings` -> `Secrets and variables` -> `Actions` -> `Secrets`
+   - `DOCKERHUB_USERNAME`：Docker Hub 用户名
+   - `DOCKERHUB_TOKEN`：Docker Hub Access Token
+2. （可选）`Variables`
+   - `DOCKERHUB_REPOSITORY`：镜像仓库名，不填则默认使用当前 GitHub 仓库名
+
+镜像会按以下策略打标签：
+
+- `latest`（默认分支）
+- 分支名
+- Git 标签（如 `v1.0.0`）
+- `sha-<short_sha>`
