@@ -1,7 +1,9 @@
 # YATTR 开发说明
 
+[English](development.en.md)
+
 本文件面向开发者，记录实现细节、接口、配置和测试方式。  
-用户使用说明请看：`README.md`。
+用户使用说明请看：[README.md](../README.md)。
 
 ## 1. 技术栈与目录
 
@@ -9,6 +11,7 @@
 - 前端：React + Vite + TypeScript
 - 调度：APScheduler
 - 插件：目录扫描 + 动态加载（当前内置 `fever`）
+- 后端路由：按功能拆分到 `backend/api/*.py`，`backend/main.py` 仅保留 feed 主流程与应用装配
 
 目录：
 
@@ -23,17 +26,28 @@
 
 `backend/main.py` 启动流程：
 
-1. `init_db()`
-2. `_get_or_create_admin()` 创建/读取管理员
-3. 读取插件启用配置并 `load_plugins(app)`
-4. `mount_frontend_static(app)`（存在 `backend/frontend_dist` 时生效）
-5. 非测试模式启动 scheduler
+1. `_configure_runtime_logging()`（日志带文件名与行号）
+2. `ensure_secure_runtime_settings()`（生产环境禁止使用默认密钥/默认管理员密码）
+3. `init_db()`
+4. `_get_or_create_admin()` 创建/读取管理员
+5. `apply_plugin_settings_to_runtime(admin)`（把用户配置的启用插件同步到运行时）
+6. `load_plugins(app)`（始终加载可发现插件，确保设置页启用后无需重启）
+7. `mount_frontend_static(app)`（存在 `backend/frontend_dist` 时生效）
+8. 非测试模式启动 scheduler
 
 ### 2.2 静态资源挂载
 
 - `/api/cache/images`：图片缓存
 - `/api/cache/favicons`：favicon 缓存
 - `/assets` 与 `/`：前端静态资源（仅在构建产物存在时）
+- SPA fallback 路径会校验必须位于 `frontend_dist` 内，阻断 `..` 路径穿透
+
+### 2.3 鉴权与安全边界
+
+- `/api/auth/*` 为匿名入口（登录/刷新/退出）
+- 其余 `/api/*` 业务接口要求 JWT 鉴权（`get_current_user`）
+- `/api/health` 与 `/api/fetch/logs` 均需要鉴权
+- 插件 Fever 数据接口走 `api_key` 协议鉴权，插件设置接口走 JWT 鉴权
 
 ## 3. 后端 API（当前实现）
 
@@ -48,6 +62,10 @@
 
 - Access Token（Bearer）
 - Refresh Token（HttpOnly Cookie）
+
+约束：
+
+- 除 `POST /api/auth/login|refresh|logout` 外，业务 API 默认均走 `get_current_user`
 
 ### 3.2 设置
 
@@ -175,7 +193,12 @@
 数据库与插件：
 
 - `RSS_DB_URL`
-- `RSS_PLUGINS`
+
+插件启用说明：
+
+- 不再通过环境变量控制插件启用列表
+- 运行时启用状态来自 `PUT /api/settings/plugins`（存储在用户配置中）
+- `load_plugins(app)` 会加载全部可发现插件，启用/禁用只影响功能是否可用
 
 CORS：
 
@@ -188,6 +211,11 @@ CORS：
 - `RSS_SCHEDULER_FETCH_INTERVAL_MIN`
 - `RSS_SCHEDULER_CLEANUP_INTERVAL_MIN`
 - `RSS_SCHEDULER_MAX_FEEDS_PER_TICK`
+
+网络安全：
+
+- `RSS_NETWORK_BLOCK_PRIVATE`
+- `RSS_NETWORK_MAX_RESPONSE_BYTES`
 
 前端 API base 覆盖：
 
@@ -254,6 +282,7 @@ npm.cmd run build
 - 宿主机端口：`8001`
 - 容器内端口：`8000`
 - `Dockerfile.single` 将前端构建产物复制到 `backend/frontend_dist`
+- `Dockerfile.single` 使用 `uv` 安装 Python 依赖并启用缓存挂载以优化构建速度
 
 ### 8.2 前后端分离
 

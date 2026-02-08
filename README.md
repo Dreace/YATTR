@@ -1,15 +1,24 @@
-# Yet Another Tiny Tiny RSS (YATTR)
+# YATTR · Yet Another Tiny Tiny RSS
 
-YATTR（Yet Another Tiny Tiny RSS）是一个单用户、桌面优先的 RSS 阅读器。
+[English](README.en.md)
 
-本文档面向使用者，只保留部署、登录和日常使用说明。  
-开发相关内容请看：`docs/development.md`。
+**YATTR** 是一个**单用户、Web 优先**的 RSS 阅读器，定位为：
 
-## 1. 快速开始
+* 自部署
+* 轻量
+* 专注阅读体验
+* 支持 Fever API（兼容主流 RSS 客户端）
 
-### 1.1 准备 `.env`
+本文档仅包含 **部署、登录与日常使用**。
+开发与架构说明见：[docs/development.md](docs/development.md)
 
-在项目根目录创建 `.env`，至少包含：
+---
+
+## 1. 快速开始（推荐）
+
+### 1.1 创建 `.env`
+
+在项目根目录创建 `.env`，至少包含以下配置：
 
 ```env
 RSS_SECRET_KEY=change_me
@@ -18,13 +27,28 @@ RSS_ADMIN_PASSWORD=your_password
 RSS_DB_URL=sqlite:///./data/rss.sqlite
 ```
 
-### 1.2 推荐部署（单容器）
+说明：
+
+* 当前为**单用户管理员模式**
+* 不支持注册
+* 已存在的用户不会被 `.env` 覆盖密码
+* 生产运行时不允许使用默认值 `change_me`（`RSS_SECRET_KEY`、`RSS_ADMIN_PASSWORD`），否则后端会拒绝启动
+
+---
+
+### 1.2 单容器部署（最简单）
 
 ```bash
 docker compose -f docker-compose.single.yml up --build
 ```
 
-启动后访问：`http://localhost:8001`
+访问地址：
+
+```
+http://localhost:8001
+```
+
+---
 
 ## 2. 其他部署方式
 
@@ -36,18 +60,24 @@ docker compose up --build
 
 访问地址：
 
-- 前端：`http://localhost:5173`
-- 后端：`http://localhost:8000`
+* 前端：[http://localhost:5173](http://localhost:5173)
+* 后端：[http://localhost:8000](http://localhost:8000)
 
-### 2.2 使用远程镜像（Docker）
+---
+
+### 2.2 使用远程镜像
 
 ```bash
 docker compose -f docker-compose.remote.yml up -d
 ```
 
-### 2.3 本地运行
+适合不需要本地构建的情况。
 
-后端（Windows）：
+---
+
+### 2.3 本地运行（Windows）
+
+#### 后端
 
 ```bash
 python -m venv backend/.venv
@@ -55,134 +85,197 @@ backend/.venv/Scripts/python.exe -m pip install -r backend/requirements-dev.txt
 backend/.venv/Scripts/python.exe -m uvicorn backend.main:app --host 0.0.0.0 --port 8000
 ```
 
-前端（Windows）：
+#### 前端
 
-1. 在 `frontend/.env.local` 中配置：
+1. 配置 `frontend/.env.local`
+
 ```env
 VITE_API_BASE_URL=http://127.0.0.1:8000
 ```
-2. 启动前端：
+
+2. 启动前端
+
 ```bash
 cd frontend
 npm.cmd install
 npm.cmd run dev
 ```
-3. 访问：`http://localhost:5173`
+
+3. 访问
+
+```
+http://localhost:5173
+```
+
+---
 
 ## 3. 登录与首次使用
 
-1. 打开网页后进入登录页（未登录访问 `/` 会自动跳转 `/login`）。
-2. 使用 `.env` 中配置的管理员账号登录。
-3. 首次使用建议按顺序操作：
-   - 先在左侧“添加订阅”输入 RSS/Atom URL，点击“验证并添加”
-   - 在设置中导入 OPML（可选）
-   - 选择“未读/全部”等区域开始阅读
+1. 访问 `/`，未登录会自动跳转 `/login`
+2. 使用 `.env` 中的管理员账号登录
+3. 建议首次操作顺序：
 
-说明：
+   * 左侧 **添加订阅** → 输入 RSS / Atom URL
+   * （可选）设置中导入 OPML
+   * 从「未读 / 全部」开始阅读
 
-- 当前是单用户管理员模式，不提供注册。
-- 若数据库中已有同邮箱账号，不会自动覆盖已有密码。
+---
 
 ## 4. 日常使用
 
 ### 4.1 订阅管理
 
-- 左侧“添加订阅”支持 URL 校验后添加。
-- 订阅源右键菜单支持：
-  - 编辑订阅
-  - 调试
-  - 删除订阅
-- 编辑订阅可调整抓取间隔、全文抽取、保留策略、图片缓存等选项。
+* 左侧支持 URL 校验后添加订阅
+* 订阅右键菜单支持：
+
+  * 编辑
+  * 调试
+  * 删除
+* 可配置项包括：
+
+  * 抓取间隔
+  * 全文抽取
+  * 保留策略
+  * 图片缓存
+
+---
 
 ### 4.2 阅读操作
 
-- 中栏支持筛选、排序、搜索、分页。
-- 支持批量动作：
-  - 当前页标记已读
-  - 一键全部已读
-  - 标记选中已读
-- 右栏可对当前文章执行：
-  - 已读/未读
-  - 收藏/取消
-  - 稍后读/取消
-  - 打开原文
+**中栏**
 
-快捷键：
+* 筛选 / 排序 / 搜索 / 分页
+* 批量操作：
 
-- `j`：下一条
-- `k`：上一条
-- `m`：已读/未读切换
-- `s`：收藏切换
-- `t`：稍后读切换
-- `o`：打开原文
+  * 当前页全部已读
+  * 全部已读
+  * 标记选中项
+
+**右栏（文章操作）**
+
+* 已读 / 未读
+* 收藏
+* 稍后读
+* 打开原文
+
+**快捷键**
+
+| 键位 | 功能    |
+| -- | ----- |
+| j  | 下一条   |
+| k  | 上一条   |
+| m  | 已读切换  |
+| s  | 收藏切换  |
+| t  | 稍后读切换 |
+| o  | 打开原文  |
+
+---
 
 ### 4.3 设置与调试
 
-设置面板支持：
+**设置面板**
 
-- 全局抓取和清理策略
-- 自动刷新间隔（秒，`0` 为关闭）
-- OPML 导入/导出
-- 插件管理
+* 全局抓取 / 清理策略
+* 时间格式（数据库存 UTC 时间戳，界面按浏览器时区渲染）
+* 语言切换（简体中文 / English / 跟随系统）
+* 自动刷新（秒，`0` 为关闭）
+* OPML 导入 / 导出
+* 系统状态（`/api/health`）
+* 插件管理
+  * 默认不启用任何插件
+  * 在设置页启用后可立即生效（无需重启）
 
-调试面板支持：
+**调试面板**
 
-- 手动触发单个订阅源抓取
-- 查看抓取日志和错误
-- 查看抓取内容预览
+* 手动抓取单个订阅
+* 查看抓取日志与错误
+* 抓取结果预览
 
-## 5. Fever 客户端使用
+---
 
-如果你用 Reeder、Fiery Feeds、ReadKit 等 Fever 客户端：
+## 5. Fever 客户端支持
 
-1. 先登录 Web 界面。
-2. 在插件设置中启用 `fever` 插件。
-3. 打开插件提供的 Fever 设置页，获取：
-   - `username`
-   - `app_password`
-   - `api_key`
-   - `endpoint_url`
-4. 在客户端中填写对应信息。
+支持 Reeder、Fiery Feeds、ReadKit 等 Fever 客户端。
 
-当前 Fever 入口路径为：`/plugins/fever/?api`
+使用步骤：
+
+1. 登录 Web
+2. 在「设置 → 插件管理」中启用 `fever`
+3. 打开 Fever 插件页面，获取：
+
+   * `username`
+   * `app_password`
+   * `api_key`
+   * `endpoint_url`
+4. 在客户端填写对应信息
+
+Fever API 入口：
+
+```
+/plugins/fever/?api
+```
+
+---
 
 ## 6. 常见问题
 
 ### 6.1 登录失败
 
-- 确认 `.env` 中的 `RSS_ADMIN_EMAIL` 和 `RSS_ADMIN_PASSWORD` 是否正确。
-- 如果数据库已创建过该用户，修改 `.env` 不会直接改数据库中的历史密码。
+* 检查 `.env` 中的邮箱与密码
+* 已存在用户不会因修改 `.env` 自动更新密码
 
-### 6.2 前端请求失败或跨域问题
+---
 
-- 本地开发请确认 `frontend/.env.local` 的 `VITE_API_BASE_URL` 指向正确后端地址。
-- 检查后端 CORS 配置是否允许当前前端地址（详见 `docs/development.md`）。
+### 6.2 前端请求失败 / 跨域
 
-### 6.3 Docker 单容器访问不到页面
+* 确认 `VITE_API_BASE_URL` 指向正确后端
+* 检查后端 CORS 配置（见 [docs/development.md](docs/development.md)）
 
-- 单容器默认对外端口是 `8001`，不是 `8000`。
-- 用 `docker compose -f docker-compose.single.yml ps` 确认容器是否正常运行。
+---
 
-## 7. GitHub Actions 自动构建 Docker 镜像
+### 6.3 单容器无法访问
 
-仓库已包含工作流：`.github/workflows/docker-publish.yml`。  
-触发条件：
+* 对外端口是 **8001**
+* 使用以下命令确认容器状态：
 
-- push 到 `main`
-- push `v*` 标签（例如 `v1.0.0`）
-- 手动触发（`workflow_dispatch`）
+```bash
+docker compose -f docker-compose.single.yml ps
+```
 
-首次使用前请在 GitHub 仓库配置以下项目：
+---
 
-1. `Settings` -> `Secrets and variables` -> `Actions` -> `Secrets`
-   - `DOCKERHUB_USERNAME`：Docker Hub 用户名
-   - `DOCKERHUB_TOKEN`：Docker Hub Access Token
-2. （可选）`Variables`
-   - `DOCKERHUB_REPOSITORY`：镜像仓库名，不填则默认使用当前 GitHub 仓库名
+## 7. GitHub Actions：Docker 自动构建
 
-镜像会按以下策略打标签：
+工作流文件：
 
-- `latest`（默认分支）
-- 分支名
-- Git 标签（如 `v1.0.0`）
-- `sha-<short_sha>`
+```
+.github/workflows/docker-publish.yml
+```
+
+### 触发条件
+
+* push 到 `main`
+* push `v*` 标签（如 `v1.0.0`）
+* 手动触发
+
+### 需要配置的 Secrets
+
+路径：
+
+```
+Settings → Secrets and variables → Actions
+```
+
+* `DOCKERHUB_USERNAME`
+* `DOCKERHUB_TOKEN`
+
+可选 Variables：
+
+* `DOCKERHUB_REPOSITORY`（默认使用 GitHub 仓库名）
+
+### 镜像标签策略
+
+* `latest`
+* 分支名
+* Git Tag（如 `v1.0.0`）
+* `sha-<short_sha>`
