@@ -37,6 +37,9 @@ vi.mock("../api", () => ({
   fetchFolders: vi
     .fn()
     .mockResolvedValue([{ id: 1, name: "默认", sort_order: 0 }]),
+  fetchFolderArticleCounts: vi
+    .fn()
+    .mockResolvedValue([{ folder_id: 1, article_count: 225 }]),
   fetchFeeds: vi.fn().mockResolvedValue([
     {
       id: 1,
@@ -46,6 +49,7 @@ vi.mock("../api", () => ({
       folder_id: 1,
       fetch_interval_min: 30,
       fulltext_enabled: false,
+      disabled: false,
       icon_url: "/api/cache/favicons/1.png",
     },
   ]),
@@ -366,6 +370,7 @@ it("opens edit-feed modal and saves with site_url", async () => {
   expect(screen.getByLabelText("保留天数")).toBeInTheDocument();
   expect(screen.getByLabelText("保留正文内容")).toBeInTheDocument();
   expect(screen.getByLabelText("启用图片缓存")).toBeInTheDocument();
+  await userEvent.click(screen.getByLabelText("禁用订阅源"));
   await userEvent.click(screen.getByRole("button", { name: "保存" }));
 
   expect(api.updateFeed).toHaveBeenCalledWith(
@@ -374,11 +379,32 @@ it("opens edit-feed modal and saves with site_url", async () => {
       title: "已编辑订阅",
       url: "https://edited.example.com/rss",
       site_url: "https://edited.example.com",
+      disabled: true,
       cleanup_retention_days: 30,
       cleanup_keep_content: true,
       image_cache_enabled: false,
     }),
   );
+});
+
+it("supports collapsing and expanding folder tree", async () => {
+  renderApp();
+  await screen.findByRole("button", { name: /示例订阅/ });
+
+  const collapseButton = screen.getByRole("button", { name: "折叠目录 默认" });
+  await userEvent.click(collapseButton);
+  expect(
+    screen.queryByRole("button", { name: /示例订阅/ }),
+  ).not.toBeInTheDocument();
+
+  const expandButton = screen.getByRole("button", { name: "展开目录 默认" });
+  await userEvent.click(expandButton);
+  expect(screen.getByRole("button", { name: /示例订阅/ })).toBeInTheDocument();
+});
+
+it("shows folder article totals", async () => {
+  renderApp();
+  expect(await screen.findByText("默认 (225)")).toBeInTheDocument();
 });
 
 it("supports one-click mark all read", async () => {

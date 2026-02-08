@@ -56,6 +56,8 @@ const messages = {
     "sidebar.add_feed.fail": "添加失败，请检查 URL 是否有效",
     "sidebar.feeds": "订阅源",
     "sidebar.feed.fetch_failed": "上次抓取失败",
+    "sidebar.folder.expand": "展开目录 {name}",
+    "sidebar.folder.collapse": "折叠目录 {name}",
     "sidebar.ungrouped": "未分组",
 
     "toolbar.filter.all": "全部",
@@ -110,6 +112,7 @@ const messages = {
     "edit.field.retention": "保留天数",
     "edit.field.keep_content": "保留正文内容",
     "edit.field.image_cache": "启用图片缓存",
+    "edit.field.disabled": "禁用订阅源",
     "edit.error.required": "标题和 URL 不能为空",
     "edit.save.loading": "保存中...",
 
@@ -247,6 +250,8 @@ const messages = {
     "sidebar.add_feed.fail": "Failed to add. Check the URL.",
     "sidebar.feeds": "Feeds",
     "sidebar.feed.fetch_failed": "Last fetch failed",
+    "sidebar.folder.expand": "Expand folder {name}",
+    "sidebar.folder.collapse": "Collapse folder {name}",
     "sidebar.ungrouped": "Ungrouped",
 
     "toolbar.filter.all": "All",
@@ -301,6 +306,7 @@ const messages = {
     "edit.field.retention": "Retention days",
     "edit.field.keep_content": "Keep content",
     "edit.field.image_cache": "Enable image cache",
+    "edit.field.disabled": "Disable feed",
     "edit.error.required": "Title and URL are required",
     "edit.save.loading": "Saving...",
 

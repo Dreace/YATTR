@@ -6,7 +6,7 @@ from typing import List
 
 import feedparser
 import httpx
-from fastapi import BackgroundTasks, Depends, HTTPException
+from fastapi import Depends, HTTPException
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -34,7 +34,7 @@ from .models import Entry, Feed, User, UserEntryState
 from .network_safety import fetch_text_response_async
 from .plugin_loader import load_plugins
 from .schemas import FeedIn, FeedOut, FeedUnreadCountOut, FeedValidateIn, FeedValidateOut
-from .scheduler import start_scheduler
+from .scheduler import enqueue_feed_update, shutdown_feed_workers, start_scheduler
 from .security import hash_password
 from .services import ConfigStore
 from .static_mounts import mount_cache_static, mount_frontend_static
@@ -124,15 +124,6 @@ def _build_feed_out(feed: Feed, user: User, defaults=None) -> FeedOut:
     )
 
 
-def _process_feed_in_background(feed_id: int, user_id: int) -> None:
-    with SessionLocal() as db:
-        feed = db.query(Feed).filter(Feed.user_id == user_id, Feed.id == feed_id).first()
-        if not feed:
-            return
-        process_feed(db, feed)
-        db.commit()
-
-
 def _shutdown_scheduler_instance(scheduler) -> None:
     if scheduler is None:
         return
@@ -163,6 +154,7 @@ def on_startup() -> None:
 @app.on_event("shutdown")
 def on_shutdown() -> None:
     _shutdown_scheduler_instance(getattr(app.state, "scheduler", None))
+    shutdown_feed_workers()
     app.state.scheduler = None
 
 
@@ -267,6 +259,8 @@ def update_feed(
     feed.url = payload.url
     feed.site_url = payload.site_url
     feed.folder_id = payload.folder_id
+    if "disabled" in fields_set and payload.disabled is not None:
+        feed.disabled = payload.disabled
     apply_feed_setting_overrides(
         feed,
         defaults,
@@ -346,15 +340,14 @@ def list_feed_unread_counts(
 def fetch_once(
     feed_id: int,
     background: bool = True,
-    background_tasks: BackgroundTasks = None,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
     feed = db.query(Feed).filter(Feed.user_id == user.id, Feed.id == feed_id).first()
     if not feed:
         raise HTTPException(status_code=404, detail="Feed not found")
-    if background and background_tasks is not None:
-        background_tasks.add_task(_process_feed_in_background, feed.id, user.id)
+    if background:
+        enqueue_feed_update(feed.id, user_id=user.id, include_disabled=True)
         return {"ok": True, "added": 0, "queued": True}
     added = process_feed(db, feed)
     db.commit()
@@ -365,15 +358,14 @@ def fetch_once(
 def debug_refresh_feed(
     feed_id: int,
     background: bool = True,
-    background_tasks: BackgroundTasks = None,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
     feed = db.query(Feed).filter(Feed.user_id == user.id, Feed.id == feed_id).first()
     if not feed:
         raise HTTPException(status_code=404, detail="Feed not found")
-    if background and background_tasks is not None:
-        background_tasks.add_task(_process_feed_in_background, feed.id, user.id)
+    if background:
+        enqueue_feed_update(feed.id, user_id=user.id, include_disabled=True)
         return {
             "ok": True,
             "feed_id": feed.id,

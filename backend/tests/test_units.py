@@ -42,6 +42,7 @@ from backend.scheduler import (
     _collect_due_feed_ids,
     _run_cleanup_tick,
     _run_fetch_tick,
+    shutdown_feed_workers,
     start_scheduler,
 )
 from backend.security import create_access_token, decode_access_token, hash_password, verify_password
@@ -707,6 +708,30 @@ def test_iter_due_feeds():
         assert any(f.id == feed.id for f in due)
 
 
+def test_iter_due_feeds_does_not_auto_disable_on_errors():
+    with SessionLocal() as db:
+        user = User(email="feeds-no-disable@example.com", password_hash="x", settings_json="{}")
+        db.add(user)
+        db.flush()
+        feed = Feed(
+            user_id=user.id,
+            title="T",
+            url="u",
+            fetch_interval_min=1,
+            error_count=12,
+            disabled=False,
+            last_fetch_at=0,
+        )
+        db.add(feed)
+        db.commit()
+
+        due = list(iter_due_feeds(db))
+        db.refresh(feed)
+
+        assert feed.disabled is False
+        assert any(f.id == feed.id for f in due)
+
+
 def test_collect_due_feed_ids_respects_limit():
     original_limit = settings.scheduler_max_feeds_per_tick
     object.__setattr__(settings, "scheduler_max_feeds_per_tick", 1)
@@ -729,7 +754,10 @@ def test_collect_due_feed_ids_respects_limit():
 def test_run_fetch_tick_dispatches_due_feed_ids(monkeypatch: pytest.MonkeyPatch):
     handled: list[int] = []
     monkeypatch.setattr("backend.scheduler._collect_due_feed_ids", lambda: [11, 22, 33])
-    monkeypatch.setattr("backend.scheduler._process_due_feed", lambda feed_id: handled.append(feed_id))
+    monkeypatch.setattr(
+        "backend.scheduler.enqueue_feed_update",
+        lambda feed_id: handled.append(feed_id) or True,
+    )
     _run_fetch_tick()
     assert handled == [11, 22, 33]
 
@@ -907,6 +935,7 @@ def test_load_plugins_registers_routes(monkeypatch: pytest.MonkeyPatch):
 def test_start_scheduler_runs_and_stops():
     scheduler = start_scheduler()
     scheduler.shutdown()
+    shutdown_feed_workers()
 
 
 def test_shutdown_scheduler_instance_calls_non_blocking_shutdown():

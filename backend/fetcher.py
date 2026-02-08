@@ -225,9 +225,6 @@ def iter_due_feeds(db) -> Iterable[Feed]:
     feeds = db.query(Feed).filter(Feed.disabled.is_(False)).all()
     defaults_by_user_id: dict[int, UserFeedDefaults] = {}
     for feed in feeds:
-        if feed.error_count >= 10:
-            feed.disabled = True
-            continue
         user_defaults = defaults_by_user_id.get(feed.user_id)
         if user_defaults is None:
             user = db.query(User).filter(User.id == feed.user_id).first()

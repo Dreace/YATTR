@@ -63,6 +63,7 @@ import {
   fetchDebugFeedLogs,
   fetchEntries,
   fetchFeeds,
+  fetchFolderArticleCounts,
   fetchFolders,
   fetchMe,
   getAccessToken,
@@ -162,6 +163,8 @@ it("fetches feeds and folders", async () => {
   expect(getMock).toHaveBeenCalledWith("/api/feeds");
   await fetchFolders();
   expect(getMock).toHaveBeenCalledWith("/api/folders");
+  await fetchFolderArticleCounts();
+  expect(getMock).toHaveBeenCalledWith("/api/folders/article_counts");
   await fetchUnreadCounts();
   expect(getMock).toHaveBeenCalledWith("/api/feeds/unread_counts");
 });

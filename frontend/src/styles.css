@@ -342,6 +342,42 @@ a {
   gap: var(--space-1);
 }
 
+.folder-row-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.folder-row-wrap .folder-row {
+  flex: 1;
+}
+
+.folder-collapse-toggle {
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-panel-2);
+  color: var(--text-main);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.folder-collapse-toggle:hover {
+  border-color: var(--tree-hover-border);
+  background: var(--bg-hover);
+}
+
+.folder-collapse-toggle:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--input-focus-ring);
+}
+
 .tree-row {
   width: 100%;
   border: 1px solid transparent;

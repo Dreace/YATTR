@@ -10,6 +10,7 @@ import {
   fetchDebugFeedLogs,
   fetchEntries,
   fetchFeeds,
+  fetchFolderArticleCounts,
   fetchFolders,
   fetchHealthStatus,
   fetchPluginProvidedSettings,
@@ -30,6 +31,7 @@ import {
   type Entry,
   type Feed,
   type FetchLog,
+  type FolderArticleCount,
   type Folder,
   type GeneralSettings,
   type HealthStatus,
@@ -69,6 +71,7 @@ interface EditFeedDraft {
   url: string;
   site_url: string;
   folder_id: number | null;
+  disabled: boolean;
   fetch_interval_min: number;
   fulltext_enabled: boolean;
   cleanup_retention_days: number;
@@ -195,6 +198,10 @@ export default function App() {
   const [unreadByFeed, setUnreadByFeed] = useState<Map<number, number>>(
     new Map(),
   );
+  const [folderArticleCountByFolder, setFolderArticleCountByFolder] = useState<
+    Map<number, number>
+  >(new Map());
+  const [ungroupedArticleCount, setUngroupedArticleCount] = useState(0);
   const [zoneCounts, setZoneCounts] = useState<ZoneCountState>({
     all: 0,
     unread: 0,
@@ -203,6 +210,10 @@ export default function App() {
   });
   const [selectedFolder, setSelectedFolder] = useState<number | null>(null);
   const [selectedFeed, setSelectedFeed] = useState<number | null>(null);
+  const [collapsedFolderIds, setCollapsedFolderIds] = useState<Set<number>>(
+    () => new Set(),
+  );
+  const [ungroupedCollapsed, setUngroupedCollapsed] = useState(false);
   const [activeZone, setActiveZone] = useState<ZoneKey>("unread");
   const [entrySort, setEntrySort] = useState<EntrySort>("updated");
   const [searchScope, setSearchScope] = useState<SearchScope>("all");
@@ -382,6 +393,20 @@ export default function App() {
     return next;
   };
 
+  const toFolderArticleCountState = (rows: FolderArticleCount[]) => {
+    const byFolder = new Map<number, number>();
+    let ungrouped = 0;
+    for (const row of rows) {
+      const count = Math.max(0, row.article_count || 0);
+      if (row.folder_id == null) {
+        ungrouped += count;
+      } else {
+        byFolder.set(row.folder_id, count);
+      }
+    }
+    return { byFolder, ungrouped };
+  };
+
   const refreshUnreadCounts = async () => {
     const rows = await fetchUnreadCounts();
     setUnreadByFeed(toUnreadMap(rows));
@@ -413,17 +438,21 @@ export default function App() {
   };
 
   const refreshBase = async () => {
-    const [folderRows, feedRows, unreadRows, settings, plugins] =
+    const [folderRows, feedRows, unreadRows, folderArticleRows, settings, plugins] =
       await Promise.all([
         fetchFolders(),
         fetchFeeds(),
         fetchUnreadCounts(),
+        fetchFolderArticleCounts(),
         getGeneralSettings(),
         fetchPluginSettings(),
       ]);
     setFolders(folderRows);
     setFeeds(feedRows);
     setUnreadByFeed(toUnreadMap(unreadRows));
+    const folderCountState = toFolderArticleCountState(folderArticleRows);
+    setFolderArticleCountByFolder(folderCountState.byFolder);
+    setUngroupedArticleCount(folderCountState.ungrouped);
     setSettingsDraft(settings);
     setPluginSettings(plugins);
     const pluginDetails = await Promise.all(
@@ -843,6 +872,7 @@ export default function App() {
       url: feed.url,
       site_url: feed.site_url ?? "",
       folder_id: feed.folder_id ?? null,
+      disabled: feed.disabled ?? false,
       fetch_interval_min: feed.fetch_interval_min ?? 30,
       fulltext_enabled: feed.fulltext_enabled ?? false,
       cleanup_retention_days:
@@ -872,6 +902,7 @@ export default function App() {
         url,
         site_url: editFeedDraft.site_url.trim() || null,
         folder_id: editFeedDraft.folder_id,
+        disabled: editFeedDraft.disabled,
         fetch_interval_min: Math.max(1, editFeedDraft.fetch_interval_min),
         fulltext_enabled: editFeedDraft.fulltext_enabled,
         cleanup_retention_days: Math.max(
@@ -959,6 +990,21 @@ export default function App() {
   const handleSelectFeed = (feed: Feed) => {
     setSelectedFeed(feed.id);
     setSelectedFolder(feed.folder_id ?? null);
+  };
+
+  const isFolderCollapsed = (folderId: number): boolean =>
+    collapsedFolderIds.has(folderId);
+
+  const toggleFolderCollapsed = (folderId: number) => {
+    setCollapsedFolderIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(folderId)) {
+        next.delete(folderId);
+      } else {
+        next.add(folderId);
+      }
+      return next;
+    });
   };
 
   const handleSignOut = async () => {
@@ -1294,123 +1340,159 @@ export default function App() {
               <div className="tree-group">
                 {sortedFolders.map((folder) => (
                   <div key={folder.id} className="tree-folder">
-                    <button
-                      type="button"
-                      className={
-                        selectedFolder === folder.id && selectedFeed == null
-                          ? "tree-row folder-row active"
-                          : "tree-row folder-row"
-                      }
-                      onClick={() => handleSelectFolder(folder.id)}
-                    >
-                      <span>{folder.name}</span>
-                    </button>
-                    <div className="tree-children">
-                      {(treeData.byFolder.get(folder.id) ?? []).map((feed) => (
-                        <button
-                          type="button"
-                          key={feed.id}
-                          className={
-                            selectedFeed === feed.id
-                              ? "tree-row feed-row active"
-                              : "tree-row feed-row"
-                          }
-                          onClick={() => handleSelectFeed(feed)}
-                          onContextMenu={(event) => {
-                            event.preventDefault();
-                            setFeedMenu({
-                              x: event.clientX,
-                              y: event.clientY,
-                              feedId: feed.id,
-                            });
-                          }}
-                        >
-                          <span className="feed-node-title">
-                            {feed.icon_url ? (
-                              <img
-                                className="feed-icon"
-                                src={toApiAssetUrl(feed.icon_url)}
-                                alt=""
-                                loading="lazy"
-                              />
-                            ) : (
-                              <span className="feed-icon placeholder" />
-                            )}
-                            {(feed.error_count ?? 0) > 0 ? (
-                              <UITooltip content={t("sidebar.feed.fetch_failed")}>
-                                <span
-                                  className="feed-error-indicator"
-                                  role="img"
-                                  aria-label={t("sidebar.feed.fetch_failed")}
-                                  title={t("sidebar.feed.fetch_failed")}
-                                >
-                                  !
-                                </span>
-                              </UITooltip>
-                            ) : null}
-                            <span className="feed-text">{feed.title}</span>
-                          </span>
-                          <UIBadge>{unreadByFeed.get(feed.id) ?? 0}</UIBadge>
-                        </button>
-                      ))}
+                    <div className="folder-row-wrap">
+                      <button
+                        type="button"
+                        className="folder-collapse-toggle"
+                        onClick={() => toggleFolderCollapsed(folder.id)}
+                        aria-label={t(
+                          isFolderCollapsed(folder.id)
+                            ? "sidebar.folder.expand"
+                            : "sidebar.folder.collapse",
+                          { name: folder.name },
+                        )}
+                      >
+                        {isFolderCollapsed(folder.id) ? "📁" : "📂"}
+                      </button>
+                      <button
+                        type="button"
+                        className={
+                          selectedFolder === folder.id && selectedFeed == null
+                            ? "tree-row folder-row active"
+                            : "tree-row folder-row"
+                        }
+                        onClick={() => handleSelectFolder(folder.id)}
+                      >
+                        <span>
+                          {folder.name} ({folderArticleCountByFolder.get(folder.id) ?? 0})
+                        </span>
+                      </button>
                     </div>
+                    {!isFolderCollapsed(folder.id) ? (
+                      <div className="tree-children">
+                        {(treeData.byFolder.get(folder.id) ?? []).map((feed) => (
+                          <button
+                            type="button"
+                            key={feed.id}
+                            className={
+                              selectedFeed === feed.id
+                                ? "tree-row feed-row active"
+                                : "tree-row feed-row"
+                            }
+                            onClick={() => handleSelectFeed(feed)}
+                            onContextMenu={(event) => {
+                              event.preventDefault();
+                              setFeedMenu({
+                                x: event.clientX,
+                                y: event.clientY,
+                                feedId: feed.id,
+                              });
+                            }}
+                          >
+                            <span className="feed-node-title">
+                              {feed.icon_url ? (
+                                <img
+                                  className="feed-icon"
+                                  src={toApiAssetUrl(feed.icon_url)}
+                                  alt=""
+                                  loading="lazy"
+                                />
+                              ) : (
+                                <span className="feed-icon placeholder" />
+                              )}
+                              {(feed.error_count ?? 0) > 0 ? (
+                                <UITooltip content={t("sidebar.feed.fetch_failed")}>
+                                  <span
+                                    className="feed-error-indicator"
+                                    role="img"
+                                    aria-label={t("sidebar.feed.fetch_failed")}
+                                    title={t("sidebar.feed.fetch_failed")}
+                                  >
+                                    !
+                                  </span>
+                                </UITooltip>
+                              ) : null}
+                              <span className="feed-text">{feed.title}</span>
+                            </span>
+                            <UIBadge>{unreadByFeed.get(feed.id) ?? 0}</UIBadge>
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
                   </div>
                 ))}
 
                 {treeData.noFolder.length > 0 ? (
                   <div className="tree-folder">
-                    <div className="tree-row folder-row">
-                      {t("sidebar.ungrouped")}
+                    <div className="folder-row-wrap">
+                      <button
+                        type="button"
+                        className="folder-collapse-toggle"
+                        onClick={() => setUngroupedCollapsed((prev) => !prev)}
+                        aria-label={t(
+                          ungroupedCollapsed
+                            ? "sidebar.folder.expand"
+                            : "sidebar.folder.collapse",
+                          { name: t("sidebar.ungrouped") },
+                        )}
+                      >
+                        {ungroupedCollapsed ? "📁" : "📂"}
+                      </button>
+                      <div className="tree-row folder-row">
+                        {t("sidebar.ungrouped")} ({ungroupedArticleCount})
+                      </div>
                     </div>
-                    <div className="tree-children">
-                      {treeData.noFolder.map((feed) => (
-                        <button
-                          type="button"
-                          key={feed.id}
-                          className={
-                            selectedFeed === feed.id
-                              ? "tree-row feed-row active"
-                              : "tree-row feed-row"
-                          }
-                          onClick={() => handleSelectFeed(feed)}
-                          onContextMenu={(event) => {
-                            event.preventDefault();
-                            setFeedMenu({
-                              x: event.clientX,
-                              y: event.clientY,
-                              feedId: feed.id,
-                            });
-                          }}
-                        >
-                          <span className="feed-node-title">
-                            {feed.icon_url ? (
-                              <img
-                                className="feed-icon"
-                                src={toApiAssetUrl(feed.icon_url)}
-                                alt=""
-                                loading="lazy"
-                              />
-                            ) : (
-                              <span className="feed-icon placeholder" />
-                            )}
-                            {(feed.error_count ?? 0) > 0 ? (
-                              <UITooltip content={t("sidebar.feed.fetch_failed")}>
-                                <span
-                                  className="feed-error-indicator"
-                                  role="img"
-                                  aria-label={t("sidebar.feed.fetch_failed")}
-                                  title={t("sidebar.feed.fetch_failed")}
-                                >
-                                  !
-                                </span>
-                              </UITooltip>
-                            ) : null}
-                            <span className="feed-text">{feed.title}</span>
-                          </span>
-                          <UIBadge>{unreadByFeed.get(feed.id) ?? 0}</UIBadge>
-                        </button>
-                      ))}
-                    </div>
+                    {!ungroupedCollapsed ? (
+                      <div className="tree-children">
+                        {treeData.noFolder.map((feed) => (
+                          <button
+                            type="button"
+                            key={feed.id}
+                            className={
+                              selectedFeed === feed.id
+                                ? "tree-row feed-row active"
+                                : "tree-row feed-row"
+                            }
+                            onClick={() => handleSelectFeed(feed)}
+                            onContextMenu={(event) => {
+                              event.preventDefault();
+                              setFeedMenu({
+                                x: event.clientX,
+                                y: event.clientY,
+                                feedId: feed.id,
+                              });
+                            }}
+                          >
+                            <span className="feed-node-title">
+                              {feed.icon_url ? (
+                                <img
+                                  className="feed-icon"
+                                  src={toApiAssetUrl(feed.icon_url)}
+                                  alt=""
+                                  loading="lazy"
+                                />
+                              ) : (
+                                <span className="feed-icon placeholder" />
+                              )}
+                              {(feed.error_count ?? 0) > 0 ? (
+                                <UITooltip content={t("sidebar.feed.fetch_failed")}>
+                                  <span
+                                    className="feed-error-indicator"
+                                    role="img"
+                                    aria-label={t("sidebar.feed.fetch_failed")}
+                                    title={t("sidebar.feed.fetch_failed")}
+                                  >
+                                    !
+                                  </span>
+                                </UITooltip>
+                              ) : null}
+                              <span className="feed-text">{feed.title}</span>
+                            </span>
+                            <UIBadge>{unreadByFeed.get(feed.id) ?? 0}</UIBadge>
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
                   </div>
                 ) : null}
               </div>
@@ -1889,6 +1971,17 @@ export default function App() {
                 }
               />
               <span>{t("edit.field.image_cache")}</span>
+            </label>
+            <label className="checkbox-label">
+              <UICheckbox
+                checked={editFeedDraft.disabled}
+                onChange={(event) =>
+                  setEditFeedDraft((prev) =>
+                    prev ? { ...prev, disabled: event.target.checked } : prev,
+                  )
+                }
+              />
+              <span>{t("edit.field.disabled")}</span>
             </label>
           </form>
         ) : null}
