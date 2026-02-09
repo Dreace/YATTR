@@ -56,11 +56,6 @@ class FolderOut(FolderIn):
     id: int
 
 
-class FolderArticleCountOut(BaseModel):
-    folder_id: Optional[int] = None
-    article_count: int
-
-
 class FeedIn(BaseModel):
     title: str
     url: str

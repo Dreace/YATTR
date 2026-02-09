@@ -553,68 +553,6 @@ def test_entries_pagination_sort_and_unread_counts():
     )
 
 
-def test_folder_article_counts():
-    headers = _auth_headers()
-    folder_response = client.post(
-        "/api/folders",
-        headers=headers,
-        json={"name": "Folder Count", "sort_order": 10},
-    )
-    assert folder_response.status_code == 200
-    folder_id = folder_response.json()["id"]
-
-    feed_response = client.post(
-        "/api/feeds",
-        headers=headers,
-        json={
-            "title": "Counted Feed",
-            "url": "https://example.com/folder-count.xml",
-            "folder_id": folder_id,
-        },
-    )
-    assert feed_response.status_code == 200
-    feed_id = feed_response.json()["id"]
-
-    with SessionLocal() as db:
-        db.add_all(
-            [
-                Entry(
-                    feed_id=feed_id,
-                    guid="fc-1",
-                    url="https://example.com/fc-1",
-                    title="Folder Count 1",
-                    author="A",
-                    published_at=1000,
-                    summary="S1",
-                    content_html="<p>S1</p>",
-                    content_text="S1",
-                    hash="folder-count-hash-1",
-                ),
-                Entry(
-                    feed_id=feed_id,
-                    guid="fc-2",
-                    url="https://example.com/fc-2",
-                    title="Folder Count 2",
-                    author="A",
-                    published_at=1001,
-                    summary="S2",
-                    content_html="<p>S2</p>",
-                    content_text="S2",
-                    hash="folder-count-hash-2",
-                ),
-            ]
-        )
-        db.commit()
-
-    counts_response = client.get("/api/folders/article_counts", headers=headers)
-    assert counts_response.status_code == 200
-    folder_rows = {
-        row["folder_id"]: row["article_count"]
-        for row in counts_response.json()
-    }
-    assert folder_rows.get(folder_id) == 2
-
-
 def test_folder_crud_and_settings_general():
     headers = _auth_headers()
     created = client.post(

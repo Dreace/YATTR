@@ -360,12 +360,27 @@ a {
   background: var(--bg-panel-2);
   color: var(--text-main);
   cursor: pointer;
-  font-size: 14px;
-  line-height: 1;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  display: inline-grid;
+  place-items: center;
   padding: 0;
+  line-height: 1;
+  text-align: center;
+}
+
+.folder-collapse-emoji {
+  width: 100%;
+  height: 100%;
+  display: inline-grid;
+  place-items: center;
+  line-height: 1;
+  font-size: 16px;
+  font-family:
+    "Apple Color Emoji",
+    "Segoe UI Emoji",
+    "Noto Color Emoji",
+    "Noto Sans SC",
+    "Segoe UI",
+    sans-serif;
 }
 
 .folder-collapse-toggle:hover {

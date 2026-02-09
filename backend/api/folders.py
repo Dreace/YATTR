@@ -3,13 +3,12 @@ from __future__ import annotations
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from ..db import get_db
 from ..dependencies import get_current_user
-from ..models import Entry, Feed, Folder, User
-from ..schemas import FolderArticleCountOut, FolderIn, FolderOut
+from ..models import Feed, Folder, User
+from ..schemas import FolderIn, FolderOut
 
 router = APIRouter()
 
@@ -21,27 +20,6 @@ def list_folders(
 ):
     folders = db.query(Folder).filter(Folder.user_id == user.id).all()
     return [FolderOut(id=f.id, name=f.name, sort_order=f.sort_order) for f in folders]
-
-
-@router.get("/api/folders/article_counts", response_model=List[FolderArticleCountOut])
-def list_folder_article_counts(
-    db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
-):
-    rows = (
-        db.query(Feed.folder_id, func.count(Entry.id))
-        .outerjoin(Entry, Entry.feed_id == Feed.id)
-        .filter(Feed.user_id == user.id)
-        .group_by(Feed.folder_id)
-        .all()
-    )
-    return [
-        FolderArticleCountOut(
-            folder_id=row[0],
-            article_count=int(row[1] or 0),
-        )
-        for row in rows
-    ]
 
 
 @router.post("/api/folders", response_model=FolderOut)
