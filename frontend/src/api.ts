@@ -185,11 +185,6 @@ export interface Folder {
   sort_order: number;
 }
 
-export interface FolderArticleCount {
-  folder_id: number | null;
-  article_count: number;
-}
-
 export interface Entry {
   id: number;
   feed_id: number;
@@ -372,11 +367,6 @@ export async function createFeed(payload: FeedCreatePayload): Promise<Feed> {
 
 export async function fetchFolders(): Promise<Folder[]> {
   const response = await api.get("/api/folders");
-  return response.data;
-}
-
-export async function fetchFolderArticleCounts(): Promise<FolderArticleCount[]> {
-  const response = await api.get("/api/folders/article_counts");
   return response.data;
 }
 

@@ -37,9 +37,6 @@ vi.mock("../api", () => ({
   fetchFolders: vi
     .fn()
     .mockResolvedValue([{ id: 1, name: "默认", sort_order: 0 }]),
-  fetchFolderArticleCounts: vi
-    .fn()
-    .mockResolvedValue([{ folder_id: 1, article_count: 225 }]),
   fetchFeeds: vi.fn().mockResolvedValue([
     {
       id: 1,
@@ -402,9 +399,9 @@ it("supports collapsing and expanding folder tree", async () => {
   expect(screen.getByRole("button", { name: /示例订阅/ })).toBeInTheDocument();
 });
 
-it("shows folder article totals", async () => {
+it("shows folder unread totals", async () => {
   renderApp();
-  expect(await screen.findByText("默认 (225)")).toBeInTheDocument();
+  expect(await screen.findByText("默认 (5)")).toBeInTheDocument();
 });
 
 it("supports one-click mark all read", async () => {

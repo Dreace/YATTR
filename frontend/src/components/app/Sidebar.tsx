@@ -32,8 +32,8 @@ interface SidebarProps {
   sortedFolders: Folder[];
   treeData: SidebarTreeData;
   unreadByFeed: Map<number, number>;
-  folderArticleCountByFolder: Map<number, number>;
-  ungroupedArticleCount: number;
+  folderUnreadCountByFolder: Map<number, number>;
+  ungroupedUnreadCount: number;
   ungroupedCollapsed: boolean;
   isFolderCollapsed: (folderId: number) => boolean;
   toApiAssetUrl: (path: string | null | undefined) => string;
@@ -60,8 +60,8 @@ export function Sidebar({
   sortedFolders,
   treeData,
   unreadByFeed,
-  folderArticleCountByFolder,
-  ungroupedArticleCount,
+  folderUnreadCountByFolder,
+  ungroupedUnreadCount,
   ungroupedCollapsed,
   isFolderCollapsed,
   toApiAssetUrl,
@@ -191,7 +191,9 @@ export function Sidebar({
                       { name: folder.name },
                     )}
                   >
-                    {isFolderCollapsed(folder.id) ? "📁" : "📂"}
+                    <span className="folder-collapse-emoji" aria-hidden="true">
+                      {isFolderCollapsed(folder.id) ? "📁" : "📂"}
+                    </span>
                   </button>
                   <button
                     type="button"
@@ -203,7 +205,7 @@ export function Sidebar({
                     onClick={() => onSelectFolder(folder.id)}
                   >
                     <span>
-                      {folder.name} ({folderArticleCountByFolder.get(folder.id) ?? 0})
+                      {folder.name} ({folderUnreadCountByFolder.get(folder.id) ?? 0})
                     </span>
                   </button>
                 </div>
@@ -268,10 +270,12 @@ export function Sidebar({
                       { name: t("sidebar.ungrouped") },
                     )}
                   >
-                    {ungroupedCollapsed ? "📁" : "📂"}
+                    <span className="folder-collapse-emoji" aria-hidden="true">
+                      {ungroupedCollapsed ? "📁" : "📂"}
+                    </span>
                   </button>
                   <div className="tree-row folder-row">
-                    {t("sidebar.ungrouped")} ({ungroupedArticleCount})
+                    {t("sidebar.ungrouped")} ({ungroupedUnreadCount})
                   </div>
                 </div>
                 {!ungroupedCollapsed ? (

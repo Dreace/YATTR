@@ -10,7 +10,6 @@ import {
   fetchDebugFeedLogs,
   fetchEntries,
   fetchFeeds,
-  fetchFolderArticleCounts,
   fetchFolders,
   fetchHealthStatus,
   fetchPluginProvidedSettings,
@@ -31,7 +30,6 @@ import {
   type Entry,
   type Feed,
   type FetchLog,
-  type FolderArticleCount,
   type Folder,
   type GeneralSettings,
   type HealthStatus,
@@ -69,6 +67,8 @@ import { SettingsDrawer } from "./components/app/SettingsDrawer";
 import { Sidebar } from "./components/app/Sidebar";
 import { Topbar } from "./components/app/Topbar";
 
+export { toSafeExternalHttpUrl } from "./app/utils";
+
 export default function App() {
   const { signOut } = useAuth();
   const { t, mode: langMode, setMode: setLangMode } = useI18n();
@@ -80,10 +80,6 @@ export default function App() {
   const [unreadByFeed, setUnreadByFeed] = useState<Map<number, number>>(
     new Map(),
   );
-  const [folderArticleCountByFolder, setFolderArticleCountByFolder] = useState<
-    Map<number, number>
-  >(new Map());
-  const [ungroupedArticleCount, setUngroupedArticleCount] = useState(0);
   const [zoneCounts, setZoneCounts] = useState<ZoneCountState>({
     all: 0,
     unread: 0,
@@ -207,6 +203,27 @@ export default function App() {
     );
   }, [feeds, selectedFolder]);
 
+  const folderUnreadCountByFolder = useMemo(() => {
+    const byFolder = new Map<number, number>();
+    for (const folder of sortedFolders) {
+      const folderFeeds = treeData.byFolder.get(folder.id) ?? [];
+      let totalUnread = 0;
+      for (const feed of folderFeeds) {
+        totalUnread += unreadByFeed.get(feed.id) ?? 0;
+      }
+      byFolder.set(folder.id, totalUnread);
+    }
+    return byFolder;
+  }, [sortedFolders, treeData, unreadByFeed]);
+
+  const ungroupedUnreadCount = useMemo(() => {
+    let totalUnread = 0;
+    for (const feed of treeData.noFolder) {
+      totalUnread += unreadByFeed.get(feed.id) ?? 0;
+    }
+    return totalUnread;
+  }, [treeData, unreadByFeed]);
+
   const articleHtml = useMemo(() => {
     const source =
       selectedEntry?.content_html || selectedEntry?.summary || t("common.none");
@@ -275,20 +292,6 @@ export default function App() {
     return next;
   };
 
-  const toFolderArticleCountState = (rows: FolderArticleCount[]) => {
-    const byFolder = new Map<number, number>();
-    let ungrouped = 0;
-    for (const row of rows) {
-      const count = Math.max(0, row.article_count || 0);
-      if (row.folder_id == null) {
-        ungrouped += count;
-      } else {
-        byFolder.set(row.folder_id, count);
-      }
-    }
-    return { byFolder, ungrouped };
-  };
-
   const refreshUnreadCounts = async () => {
     const rows = await fetchUnreadCounts();
     setUnreadByFeed(toUnreadMap(rows));
@@ -320,21 +323,17 @@ export default function App() {
   };
 
   const refreshBase = async () => {
-    const [folderRows, feedRows, unreadRows, folderArticleRows, settings, plugins] =
+    const [folderRows, feedRows, unreadRows, settings, plugins] =
       await Promise.all([
         fetchFolders(),
         fetchFeeds(),
         fetchUnreadCounts(),
-        fetchFolderArticleCounts(),
         getGeneralSettings(),
         fetchPluginSettings(),
       ]);
     setFolders(folderRows);
     setFeeds(feedRows);
     setUnreadByFeed(toUnreadMap(unreadRows));
-    const folderCountState = toFolderArticleCountState(folderArticleRows);
-    setFolderArticleCountByFolder(folderCountState.byFolder);
-    setUngroupedArticleCount(folderCountState.ungrouped);
     setSettingsDraft(settings);
     setPluginSettings(plugins);
     const pluginDetails = await Promise.all(
@@ -1095,8 +1094,8 @@ export default function App() {
           sortedFolders={sortedFolders}
           treeData={treeData}
           unreadByFeed={unreadByFeed}
-          folderArticleCountByFolder={folderArticleCountByFolder}
-          ungroupedArticleCount={ungroupedArticleCount}
+          folderUnreadCountByFolder={folderUnreadCountByFolder}
+          ungroupedUnreadCount={ungroupedUnreadCount}
           ungroupedCollapsed={ungroupedCollapsed}
           isFolderCollapsed={isFolderCollapsed}
           toApiAssetUrl={toApiAssetUrl}
