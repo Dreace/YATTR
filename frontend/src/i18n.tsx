@@ -403,7 +403,7 @@ const messages = {
   },
 } as const;
 
-type MessageKey = keyof typeof messages.zh;
+export type MessageKey = keyof typeof messages.zh;
 
 function detectSystemLanguage(): Language {
   if (typeof navigator === "undefined") {

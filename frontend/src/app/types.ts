@@ -1,9 +1,14 @@
+import type { MessageKey } from "../i18n";
+
 export type EntryStateFilter = "all" | "unread" | "starred" | "later";
 export type ZoneKey = EntryStateFilter;
 export type SearchScope = "all" | "title" | "summary" | "content";
 export type EntrySort = "updated" | "title";
 export type ThemeMode = "light" | "dark" | "system";
-export type TranslateFn = (key: string, params?: Record<string, string | number>) => string;
+export type TranslateFn = (
+  key: MessageKey,
+  params?: Record<string, string | number>,
+) => string;
 
 export interface EditFeedDraft {
   id: number;
