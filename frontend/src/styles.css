@@ -98,6 +98,9 @@
   --sheet-border: #3a434d;
   --sheet-shadow: rgba(0, 0, 0, 0.42);
   --sheet-backdrop-bg: rgba(6, 8, 10, 0.62);
+  --scrollbar-track: rgba(255, 255, 255, 0.06);
+  --scrollbar-thumb: rgba(186, 200, 214, 0.36);
+  --scrollbar-thumb-hover: rgba(186, 200, 214, 0.58);
   --radius-sm: 6px;
   --radius-md: 8px;
   --radius-lg: 10px;
@@ -209,6 +212,9 @@
   --sheet-border: #c7d4e4;
   --sheet-shadow: rgba(15, 23, 42, 0.2);
   --sheet-backdrop-bg: rgba(15, 23, 42, 0.2);
+  --scrollbar-track: rgba(15, 23, 42, 0.08);
+  --scrollbar-thumb: rgba(71, 85, 105, 0.38);
+  --scrollbar-thumb-hover: rgba(71, 85, 105, 0.56);
 }
 
 * {
@@ -234,6 +240,30 @@ body {
   color: var(--text-main);
   font-family: var(--font-family);
   font-size: 14px;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+  border-radius: 999px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 999px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
 }
 
 a {

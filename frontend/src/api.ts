@@ -288,6 +288,11 @@ export interface FeedCreatePayload {
   image_cache_enabled?: boolean;
 }
 
+export interface FolderCreatePayload {
+  name: string;
+  sort_order?: number;
+}
+
 export interface FeedUnreadCount {
   feed_id: number;
   unread_count: number;
@@ -368,6 +373,20 @@ export async function createFeed(payload: FeedCreatePayload): Promise<Feed> {
 export async function fetchFolders(): Promise<Folder[]> {
   const response = await api.get("/api/folders");
   return response.data;
+}
+
+export async function createFolder(payload: FolderCreatePayload): Promise<Folder> {
+  const response = await api.post("/api/folders", payload);
+  return response.data;
+}
+
+export async function deleteFolder(
+  folderId: number,
+  deleteFeeds = false,
+): Promise<void> {
+  await api.delete(`/api/folders/${folderId}`, {
+    params: { delete_feeds: deleteFeeds },
+  });
 }
 
 export async function updateFeed(

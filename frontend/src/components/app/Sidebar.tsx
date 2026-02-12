@@ -29,6 +29,8 @@ interface SidebarProps {
   newFeedUrl: string;
   newFeedFolderId: number | null;
   newFeedMessage: string;
+  newFolderName: string;
+  newFolderMessage: string;
   sortedFolders: Folder[];
   treeData: SidebarTreeData;
   unreadByFeed: Map<number, number>;
@@ -41,9 +43,12 @@ interface SidebarProps {
   onNewFeedUrlChange: (value: string) => void;
   onNewFeedFolderChange: (value: number | null) => void;
   onAddFeed: () => void;
+  onNewFolderNameChange: (value: string) => void;
+  onAddFolder: () => void;
   onToggleFolderCollapsed: (folderId: number) => void;
   onSelectFolder: (folderId: number) => void;
   onSelectFeed: (feed: Feed) => void;
+  onFolderContextMenu: (event: MouseEvent<HTMLButtonElement>, folder: Folder) => void;
   onToggleUngrouped: () => void;
   onFeedContextMenu: (event: MouseEvent<HTMLButtonElement>, feed: Feed) => void;
 }
@@ -57,6 +62,8 @@ export function Sidebar({
   newFeedUrl,
   newFeedFolderId,
   newFeedMessage,
+  newFolderName,
+  newFolderMessage,
   sortedFolders,
   treeData,
   unreadByFeed,
@@ -69,9 +76,12 @@ export function Sidebar({
   onNewFeedUrlChange,
   onNewFeedFolderChange,
   onAddFeed,
+  onNewFolderNameChange,
+  onAddFolder,
   onToggleFolderCollapsed,
   onSelectFolder,
   onSelectFeed,
+  onFolderContextMenu,
   onToggleUngrouped,
   onFeedContextMenu,
 }: SidebarProps) {
@@ -173,6 +183,23 @@ export function Sidebar({
 
       <UISeparator />
 
+      <section className="sidebar-section">
+        <div className="section-title">{t("sidebar.add_folder")}</div>
+        <div className="add-feed-form">
+          <UIInput
+            value={newFolderName}
+            onChange={(event) => onNewFolderNameChange(event.target.value)}
+            placeholder={t("sidebar.add_folder.placeholder")}
+          />
+          <UIButton onClick={onAddFolder}>{t("sidebar.add_folder.button")}</UIButton>
+        </div>
+        {newFolderMessage ? (
+          <div className="inline-message">{newFolderMessage}</div>
+        ) : null}
+      </section>
+
+      <UISeparator />
+
       <section className="sidebar-section sidebar-tree-wrap">
         <div className="section-title">{t("sidebar.feeds")}</div>
         <UIScrollArea className="sidebar-tree-scroll">
@@ -203,6 +230,7 @@ export function Sidebar({
                         : "tree-row folder-row"
                     }
                     onClick={() => onSelectFolder(folder.id)}
+                    onContextMenu={(event) => onFolderContextMenu(event, folder)}
                   >
                     <span>
                       {folder.name} ({folderUnreadCountByFolder.get(folder.id) ?? 0})

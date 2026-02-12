@@ -110,6 +110,12 @@ vi.mock("../api", () => ({
     site_url: "https://new.example.com",
     folder_id: 1,
   }),
+  createFolder: vi.fn().mockResolvedValue({
+    id: 2,
+    name: "技术",
+    sort_order: 1,
+  }),
+  deleteFolder: vi.fn().mockResolvedValue(undefined),
   deleteFeed: vi.fn().mockResolvedValue(undefined),
   fetchFeedNow: vi.fn().mockResolvedValue({ ok: true, added: 1 }),
   markEntryRead: vi.fn().mockResolvedValue(undefined),
@@ -235,10 +241,6 @@ vi.mock("../auth/AuthProvider", () => ({
 }));
 
 beforeEach(() => {
-  vi.stubGlobal(
-    "confirm",
-    vi.fn(() => true),
-  );
   localStorage.setItem("rss_lang_mode", "zh");
 });
 
@@ -335,6 +337,21 @@ it("supports search, sorting and pagination", async () => {
   );
 });
 
+it("creates folder from sidebar controls", async () => {
+  renderApp();
+  await userEvent.type(
+    await screen.findByPlaceholderText("输入目录名称"),
+    "技术",
+  );
+  await userEvent.click(screen.getByRole("button", { name: "新建目录" }));
+
+  expect(api.createFolder).toHaveBeenCalledWith({
+    name: "技术",
+    sort_order: 1,
+  });
+  expect(await screen.findByText("目录创建成功")).toBeInTheDocument();
+});
+
 it("syncs reader pane and keyboard navigation", async () => {
   renderApp();
   expect((await screen.findAllByText("标题A")).length).toBeGreaterThan(0);
@@ -397,6 +414,21 @@ it("supports collapsing and expanding folder tree", async () => {
   const expandButton = screen.getByRole("button", { name: "展开目录 默认" });
   await userEvent.click(expandButton);
   expect(screen.getByRole("button", { name: /示例订阅/ })).toBeInTheDocument();
+});
+
+it("supports deleting folder from context menu", async () => {
+  renderApp();
+  const folderButton = await screen.findByRole("button", { name: "默认 (5)" });
+
+  fireEvent.contextMenu(folderButton);
+  await userEvent.click(screen.getByText("删除目录"));
+  await screen.findByRole("dialog", { name: "删除目录" });
+  await userEvent.click(screen.getByRole("button", { name: "删除目录" }));
+  await userEvent.click(
+    screen.getByRole("button", { name: "仅删除目录并移到未分组" }),
+  );
+
+  expect(api.deleteFolder).toHaveBeenCalledWith(1, false);
 });
 
 it("shows folder unread totals", async () => {

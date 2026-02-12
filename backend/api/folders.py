@@ -59,6 +59,7 @@ def update_folder(
 @router.delete("/api/folders/{folder_id}")
 def delete_folder(
     folder_id: int,
+    delete_feeds: bool = False,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
@@ -69,9 +70,15 @@ def delete_folder(
     )
     if not folder:
         raise HTTPException(status_code=404, detail="Folder not found")
-    db.query(Feed).filter(Feed.user_id == user.id, Feed.folder_id == folder_id).update(
-        {Feed.folder_id: None}
+    feed_query = db.query(Feed).filter(
+        Feed.user_id == user.id,
+        Feed.folder_id == folder_id,
     )
+    if delete_feeds:
+        for feed in feed_query.all():
+            db.delete(feed)
+    else:
+        feed_query.update({Feed.folder_id: None})
     db.delete(folder)
     db.commit()
     return {"ok": True}

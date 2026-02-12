@@ -53,9 +53,11 @@ vi.mock("axios", () => ({
 
 import {
   createFeed,
+  createFolder,
   batchUpdateEntries,
   clearAccessToken,
   deleteFeed,
+  deleteFolder,
   debugRefreshFeed,
   exportOpml,
   fetchFeedNow,
@@ -164,6 +166,21 @@ it("fetches feeds and folders", async () => {
   expect(getMock).toHaveBeenCalledWith("/api/folders");
   await fetchUnreadCounts();
   expect(getMock).toHaveBeenCalledWith("/api/feeds/unread_counts");
+});
+
+it("deletes folder with delete_feeds flag", async () => {
+  await deleteFolder(9, true);
+  expect(deleteMock).toHaveBeenCalledWith("/api/folders/9", {
+    params: { delete_feeds: true },
+  });
+});
+
+it("creates folder", async () => {
+  await createFolder({ name: "Tech", sort_order: 2 });
+  expect(postMock).toHaveBeenCalledWith("/api/folders", {
+    name: "Tech",
+    sort_order: 2,
+  });
 });
 
 it("validates and creates feed", async () => {

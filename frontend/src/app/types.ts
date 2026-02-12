@@ -1,5 +1,4 @@
 import type { MessageKey } from "../i18n";
-
 export type EntryStateFilter = "all" | "unread" | "starred" | "later";
 export type ZoneKey = EntryStateFilter;
 export type SearchScope = "all" | "title" | "summary" | "content";
@@ -30,6 +29,11 @@ export interface FeedMenuState {
   feedId: number;
 }
 
+export interface FolderMenuState {
+  x: number;
+  y: number;
+  folderId: number;
+}
 export interface ZoneCountState {
   all: number;
   unread: number;

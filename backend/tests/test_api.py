@@ -596,8 +596,59 @@ def test_folder_crud_and_settings_general():
     assert settings_put.json()["auto_refresh_interval_sec"] == 30
     assert settings_put.json()["time_format"] == "YYYY/MM/DD HH:mm"
 
+    feed = client.post(
+        "/api/feeds",
+        headers=headers,
+        json={
+            "title": "Folder Keep Feed",
+            "url": "https://example.com/folder-keep.xml",
+            "folder_id": folder_id,
+        },
+    )
+    assert feed.status_code == 200
+    feed_id = feed.json()["id"]
+
     deleted = client.delete(f"/api/folders/{folder_id}", headers=headers)
     assert deleted.status_code == 200
+
+    listed = client.get("/api/feeds", headers=headers)
+    assert listed.status_code == 200
+    kept_feed = next((row for row in listed.json() if row["id"] == feed_id), None)
+    assert kept_feed is not None
+    assert kept_feed["folder_id"] is None
+
+
+def test_delete_folder_with_delete_feeds_true():
+    headers = _auth_headers()
+    created = client.post(
+        "/api/folders",
+        headers=headers,
+        json={"name": "Delete All", "sort_order": 1},
+    )
+    assert created.status_code == 200
+    folder_id = created.json()["id"]
+
+    feed = client.post(
+        "/api/feeds",
+        headers=headers,
+        json={
+            "title": "Folder Remove Feed",
+            "url": "https://example.com/folder-remove.xml",
+            "folder_id": folder_id,
+        },
+    )
+    assert feed.status_code == 200
+    feed_id = feed.json()["id"]
+
+    deleted = client.delete(
+        f"/api/folders/{folder_id}?delete_feeds=true",
+        headers=headers,
+    )
+    assert deleted.status_code == 200
+
+    listed = client.get("/api/feeds", headers=headers)
+    assert listed.status_code == 200
+    assert all(row["id"] != feed_id for row in listed.json())
 
 
 def test_plugin_settings_endpoints():
